@@ -280,3 +280,4 @@ Deno.serve(async (req: Request) => {
     return json({ success: false, partial: false, error: "Váratlan szerverhiba; azonosító alapján ellenőrizd a naplót" }, 500);
   }
 });
+
