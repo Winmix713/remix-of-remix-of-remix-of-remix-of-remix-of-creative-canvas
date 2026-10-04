@@ -311,7 +311,32 @@ export async function ingestSeasonsToCloud(params: {
     const res = await fetch(`${env.url}/functions/v1/winmix-ingest`, {
       method: 'POST',
       headers: { ...functionHeaders(env.anonKey), 'X-Admin-Token': adminToken },
-      body: JSON.stringify({ seasons: params.seasons, teamAliasMap: params.teamAliasMap }),
+      body: JSON.stringify({
+        mode: 'merge',
+        allowPartial: false,
+        teamAliasMap: params.teamAliasMap,
+        // The ingest function requires an explicit orderMode and only these fields.
+        seasons: params.seasons.map((s) => ({
+          league: s.league,
+          seasonIndex: s.seasonIndex,
+          name: s.name,
+          fileName: s.fileName || null,
+          contentHash: s.contentHash,
+          orderMode: s.orderMode === 'chronological' ? 'chronological' : 'source-order',
+          matches: s.matches.map((m) => ({
+            home_team: m.home_team,
+            away_team: m.away_team,
+            home_score: m.home_score,
+            away_score: m.away_score,
+            ht_home_score: m.ht_home_score,
+            ht_away_score: m.ht_away_score,
+            kickoffIso: m.kickoffIso ?? null,
+            date: m.date || null,
+            rowIndex: typeof m.rowIndex === 'number' ? m.rowIndex : null,
+            sourceFileId: m.sourceFileId ?? null
+          }))
+        }))
+      }),
       signal: controller.signal
     });
     if (res.status === 404) return fail('A feltöltő funkció (winmix-ingest) még nincs telepítve az adatbázis projektedben.');
