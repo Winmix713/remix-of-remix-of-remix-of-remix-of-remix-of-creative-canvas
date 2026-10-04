@@ -1,3 +1,4 @@
+# Merge this function block into your existing config; preserve other settings.
 project_id = "dpmyxypqcsugycqhifaf"
 
 [functions.winmix-ingest]

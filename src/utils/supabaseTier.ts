@@ -1,19 +1,4 @@
-/**
- * PHASE 5 — Supabase as an ADDITIONAL, read-only, opt-in tier.
- *
- * Hard rules encoded here:
- *  • Only the ANON key is ever read from the environment. A service-role key is
- *    a server-only secret (ingestion CLI / edge function) and must never be
- *    referenced from client code — see docs/supabase-migration.md.
- *  • RLS grants `select` and nothing else to anon, so this module never
- *    attempts a write. Persistence of app state stays on the existing
- *    localStorage tier, with its corruption quarantine and JSON export intact.
- *  • Any failure — unconfigured, offline, timeout, RLS rejection — degrades the
- *    session to 'local' for good and surfaces a banner. Supabase is never a
- *    hard dependency.
- *  • Anything fetched from SQL is ADVISORY / UI-only. It never feeds the
- *    pipeline, the joint score matrix, or the seeded bootstrap.
- */
+/** Optional advisory cloud reads and operator-authorized imports. No admin key in browser. */
 import type { League } from '../types/winmix';
 import { readCloudEnv } from './cloudConfig';
 
@@ -92,10 +77,10 @@ async function readPostgrestDetail(res: Response): Promise<string> {
 
 /** New `sb_publishable_…` keys are opaque strings, not JWTs — never send them as Bearer. */
 function isOpaqueKey(key: string): boolean {
-  return key.startsWith('sb_publishable_') || key.startsWith('sb_secret_');
+  return key.startsWith('sb_publishable_');
 }
 
-async function restGet(path: string): Promise<unknown> {
+async function restGet(path: string, allPages = false): Promise<unknown> {
   const env = readEnv();
   if (!env) throw new Error('A felhő tier nincs konfigurálva (VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY).');
   const controller = new AbortController();
@@ -108,8 +93,14 @@ async function restGet(path: string): Promise<unknown> {
       apikey: env.anonKey,
       Accept: 'application/json'
     };
+    if (env.anonKey.startsWith('sb_secret_')) throw new Error('Titkos kulcs nem használható a böngészőben.');
     if (!isOpaqueKey(env.anonKey)) headers.Authorization = `Bearer ${env.anonKey}`;
-    const res = await fetch(`${env.url}/rest/v1/${path}`, {
+    const rows: unknown[] = [];
+    let offset = 0;
+    if (allPages) headers.Prefer = 'count=exact';
+    while (true) {
+    const requestPath = allPages ? `${path}&limit=500&offset=${offset}` : path;
+    const res = await fetch(`${env.url}/rest/v1/${requestPath}`, {
       method: 'GET',
       headers,
       signal: controller.signal
@@ -118,7 +109,18 @@ async function restGet(path: string): Promise<unknown> {
       const detail = await readPostgrestDetail(res);
       throw new CloudHttpError(res.status, describeHttpError(res.status, res.statusText) + detail);
     }
-    return (await res.json()) as unknown;
+    const body: unknown = await res.json();
+    if (!allPages) return body;
+    if (!Array.isArray(body)) throw new Error('Hibás lapozott SQL-válasz.');
+    const range = res.headers.get('content-range');
+    const totalText = range?.split('/')[1];
+    if (!totalText || !/^\d+$/.test(totalText)) throw new Error('Hiányzó pontos SQL sorszám a Content-Range fejlécben.');
+    const total = Number(totalText);
+    rows.push(...body); offset += body.length;
+    if (offset >= total) return rows;
+    if (!body.length) throw new Error('A SQL lapozás megszakadt.');
+    }
+
   } finally {
     window.clearTimeout(timer);
   }
@@ -139,10 +141,9 @@ export async function probeCloudTier(): Promise<CloudTierHealth> {
     // is not deployed yet, so fall back to the REST root to prove reachability.
     // A 401/403 is a real credential/RLS/GRANT problem and must not be masked.
     try {
-      await restGet('view_team_ratings?select=canonical_key&limit=1');
+      await restGet('view_team_ratings_v2?select=canonical_key&limit=1');
     } catch (e) {
-      if (e instanceof CloudHttpError && (e.status === 401 || e.status === 403)) throw e;
-      await restGet('winmix_teams?select=id&limit=1');
+      throw e; // Missing ratings migration must be visible; reachability alone is insufficient.
     }
     return { status: 'online', degraded: false, lastError: null, checkedAt: new Date().toISOString() };
   } catch (e) {
@@ -164,6 +165,8 @@ export interface CloudTeamRating {
   netAway: number;
   ppg: number;
   autoWeightIndex: number;
+  league: League;
+  comparable: boolean;
 }
 
 function num(value: unknown): number {
@@ -175,67 +178,23 @@ function num(value: unknown): number {
 export type RatingsSource = 'view' | 'team_season_stats' | 'none';
 export let lastRatingsSource: RatingsSource = 'none';
 
-async function fetchFromSeasonStats(league: League): Promise<CloudTeamRating[]> {
-  const [teams, stats] = await Promise.all([
-    restGet(`winmix_teams?league=eq.${encodeURIComponent(league)}&select=id,canonical_key,display_name,weight_index`),
-    restGet(`winmix_team_season_stats?league=eq.${encodeURIComponent(league)}&select=team_id,played,goals_for,goals_against,points`)
-  ]);
-  if (!Array.isArray(teams) || !Array.isArray(stats) || stats.length === 0) return [];
-  const agg = new Map<string, { p: number; gf: number; ga: number; pts: number }>();
-  for (const s of stats as Array<Record<string, unknown>>) {
-    const id = String(s.team_id);
-    const a = agg.get(id) ?? { p: 0, gf: 0, ga: 0, pts: 0 };
-    a.p += num(s.played); a.gf += num(s.goals_for); a.ga += num(s.goals_against); a.pts += num(s.points);
-    agg.set(id, a);
-  }
-  return (teams as Array<Record<string, unknown>>).flatMap((t) => {
-    const a = agg.get(String(t.id));
-    if (!a || a.p === 0) return [];
-    const net = (a.gf - a.ga) / a.p;
-    // The stats table has no home/away goal split, so both sides show the overall net.
-    return [{
-      canonicalKey: String(t.canonical_key ?? ''),
-      displayName: String(t.display_name ?? ''),
-      totalPlayed: a.p,
-      netHome: net,
-      netAway: net,
-      ppg: a.pts / a.p,
-      autoWeightIndex: num(t.weight_index)
-    }];
-  });
-}
-
-/**
- * Reads the SQL-side ratings for cross-checking against
- * `computeAutoTeamWeights()`. Tries `view_team_ratings` first, then falls back
- * to `winmix_team_season_stats`. UI-only: never fed into the pipeline.
+/** v2 uses mean goal differential for actual home and away appearances.
+ * Local autoWeights formula/scope was not supplied, so equality is not asserted.
  */
 export async function fetchCloudTeamRatings(league: League): Promise<CloudTeamRating[]> {
-  try {
-    const raw = await restGet(
-      `view_team_ratings?league=eq.${encodeURIComponent(league)}&select=canonical_key,display_name,total_played,net_home,net_away,ppg,auto_weight_index`
-    );
-    if (Array.isArray(raw) && raw.length) {
-      lastRatingsSource = 'view';
-      return raw.map((row) => {
-        const r = row as Record<string, unknown>;
-        return {
-          canonicalKey: String(r.canonical_key ?? ''),
-          displayName: String(r.display_name ?? ''),
-          totalPlayed: num(r.total_played),
-          netHome: num(r.net_home),
-          netAway: num(r.net_away),
-          ppg: num(r.ppg),
-          autoWeightIndex: num(r.auto_weight_index)
-        };
-      });
-    }
-  } catch (e) {
-    if (!(e instanceof CloudHttpError) || (e.status !== 404 && e.status !== 400)) throw e;
-  }
-  const rows = await fetchFromSeasonStats(league);
-  lastRatingsSource = rows.length ? 'team_season_stats' : 'none';
-  return rows;
+  lastRatingsSource = 'none';
+  const raw = await restGet(
+    `view_team_ratings_v2?league=eq.${encodeURIComponent(league)}&select=canonical_key,display_name,total_played,net_home,net_away,ppg,auto_weight_index&order=canonical_key.asc`, true
+  );
+  if (!Array.isArray(raw)) throw new Error('Hibás SQL-értékelési válasz.');
+  lastRatingsSource = raw.length ? 'view' : 'none';
+  return raw.map((row) => {
+    if (!row || typeof row !== 'object') throw new Error('Hibás SQL-értékelési sor.');
+    const r = row as Record<string, unknown>;
+    return { canonicalKey: String(r.canonical_key ?? ''), displayName: String(r.display_name ?? ''),
+      totalPlayed: num(r.total_played), netHome: num(r.net_home), netAway: num(r.net_away),
+      ppg: num(r.ppg), autoWeightIndex: num(r.auto_weight_index), league, comparable: false };
+  });
 }
 
 export interface IngestRowError {
@@ -254,6 +213,11 @@ export interface IngestResult {
   repaired: number;
   errors: string[];
   rowErrors?: IngestRowError[];
+  requestId?: string;
+  requestIds?: string[];
+  partial?: boolean;
+  results?: Array<Record<string, unknown>>;
+  rowErrorsTruncated?: boolean;
 }
 
 /**
@@ -286,6 +250,7 @@ export async function ingestSeasonsToCloud(params: {
       away_score: number;
     }>;
   }>;
+  importToken: string;
   teamWeights?: Record<string, Record<string, number>>;
   teamAliasMap?: Record<string, Record<string, string>>;
 }): Promise<IngestResult> {
@@ -294,64 +259,65 @@ export async function ingestSeasonsToCloud(params: {
   });
   const env = readEnv();
   if (!env) return fail('A felhő tier nincs konfigurálva.');
-  const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), 60000);
-  try {
-    const res = await fetch(`${env.url}/functions/v1/winmix-ingest`, {
-      method: 'POST',
-      headers: { ...functionHeaders(env.anonKey) },
-      body: JSON.stringify({
-        mode: 'merge',
-        allowPartial: false,
-        teamAliasMap: params.teamAliasMap,
-        // The ingest function requires an explicit orderMode and only these fields.
-        seasons: params.seasons.map((s) => ({
-          league: s.league,
-          seasonIndex: s.seasonIndex,
-          name: s.name,
-          fileName: s.fileName || null,
-          contentHash: s.contentHash,
-          orderMode: s.orderMode === 'chronological' ? 'chronological' : 'source-order',
-          matches: s.matches.map((m) => ({
-            home_team: m.home_team,
-            away_team: m.away_team,
-            home_score: m.home_score,
-            away_score: m.away_score,
-            ht_home_score: m.ht_home_score,
-            ht_away_score: m.ht_away_score,
-            kickoffIso: m.kickoffIso ?? null,
-            date: m.date || null,
-            rowIndex: typeof m.rowIndex === 'number' ? m.rowIndex : null,
-            sourceFileId: m.sourceFileId ?? null
-          }))
-        }))
-      }),
-      signal: controller.signal
-    });
-    if (res.status === 404) return fail('A feltöltő funkció (winmix-ingest) még nincs telepítve az adatbázis projektedben.');
-    const body = (await res.json().catch(() => ({}))) as Partial<IngestResult> & { error?: string };
-    if (!res.ok && res.status !== 207) return fail(body.error ?? `HTTP ${res.status}`);
-    return {
-      success: body.success ?? false,
-      seasons: body.seasons ?? 0,
-      teams: body.teams ?? 0,
-      matches: body.matches ?? 0,
-      rejected: body.rejected ?? 0,
-      repaired: body.repaired ?? 0,
-      errors: body.errors ?? [],
-      rowErrors: body.rowErrors ?? []
-    };
-  } catch (e) {
-    return fail(e instanceof Error ? e.message : String(e));
-  } finally {
-    window.clearTimeout(timer);
+  if (!/^[a-f0-9]{64}$/i.test(params.importToken)) return fail('64 karakteres hex importtoken szükséges.');
+  if (!params.seasons.length) return fail('Nincs feltöltendő szezon.');
+  const combined: IngestResult = { success: true, partial: false, seasons: 0, teams: 0, matches: 0,
+    rejected: 0, repaired: 0, errors: [], rowErrors: [], results: [], requestIds: [] };
+  const uniqueTeams = new Set<string>();
+  // One complete season per request: never split its stable match numbers.
+  // Validate every request size BEFORE the first write.
+  const requests = params.seasons.map((s) => ({
+    mode: 'merge', allowPartial: false, teamAliasMap: params.teamAliasMap,
+    seasons: [{ league: s.league, seasonIndex: s.seasonIndex, name: s.name,
+      fileName: s.fileName || null, contentHash: s.contentHash,
+      orderMode: s.orderMode === 'chronological' ? 'chronological' : 'source-order',
+      matches: s.matches.map((m) => ({ home_team: m.home_team, away_team: m.away_team,
+        home_score: m.home_score, away_score: m.away_score, ht_home_score: m.ht_home_score,
+        ht_away_score: m.ht_away_score, kickoffIso: m.kickoffIso ?? null, date: m.date || null,
+        rowIndex: typeof m.rowIndex === 'number' ? m.rowIndex : null, sourceFileId: m.sourceFileId ?? null })) }]
+  }));
+  const bodies = requests.map((r) => JSON.stringify(r));
+  const oversized = requests.findIndex((r, i) => r.seasons[0].matches.length > 2000 ||
+    new TextEncoder().encode(bodies[i]).length > 4 * 1024 * 1024);
+  if (oversized >= 0) return fail(`A(z) ${params.seasons[oversized].name} szezon meghaladja a 2000 mérkőzés / 4 MiB korlátot.`);
+  for (let i = 0; i < bodies.length; i++) {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 60000);
+    try {
+      const res = await fetch(`${env.url}/functions/v1/winmix-ingest`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', apikey: env.anonKey,
+          'x-winmix-ingest-token': params.importToken }, body: bodies[i], signal: controller.signal
+      });
+      const body = await res.json().catch(() => null) as (Partial<IngestResult> & { error?: string }) | null;
+      const requestId = body?.requestId ?? res.headers.get('X-Request-Id');
+      if (requestId) combined.requestIds!.push(requestId);
+      combined.seasons += body?.seasons ?? 0; combined.matches += body?.matches ?? 0;
+      combined.rejected += body?.rejected ?? 0; combined.repaired += body?.repaired ?? 0;
+      combined.errors.push(...(body?.errors ?? [])); combined.rowErrors!.push(...(body?.rowErrors ?? []));
+      combined.results!.push(...(body?.results ?? []));
+      combined.rowErrorsTruncated ||= body?.rowErrorsTruncated ?? false;
+      if (!res.ok || body?.success !== true) {
+        combined.success = false;
+        if (body?.error) combined.errors.push(body.error);
+        if (!body?.error && !body?.errors?.length) combined.errors.push(`HTTP ${res.status}: ${params.seasons[i].name}`);
+        break; // Preserve confirmed earlier commits, stop subsequent seasons.
+      }
+      for (const m of requests[i].seasons[0].matches) {
+        for (const name of [m.home_team, m.away_team]) {
+          const key = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+          const alias = params.teamAliasMap?.[params.seasons[i].league]?.[key] ?? key;
+          uniqueTeams.add(`${params.seasons[i].league}:${alias}`);
+        }
+      }
+    } catch (error) {
+      combined.success = false;
+      combined.errors.push(error instanceof Error && error.name === 'AbortError'
+        ? 'Időtúllépés: a szerver mentése befejeződhetett. Ellenőrizd, majd ismételd a merge importot.'
+        : error instanceof Error ? error.message : String(error));
+      break;
+    } finally { window.clearTimeout(timer); }
   }
+  combined.teams = uniqueTeams.size;
+  combined.partial = !combined.success && combined.seasons > 0;
+  return combined;
 }
-
-function functionHeaders(key: string): Record<string, string> {
-  const h: Record<string, string> = { 'Content-Type': 'application/json', apikey: key };
-  if (!isOpaqueKey(key)) h.Authorization = `Bearer ${key}`;
-  return h;
-}
-
-

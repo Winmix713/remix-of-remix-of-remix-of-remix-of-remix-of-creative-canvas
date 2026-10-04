@@ -1,83 +1,46 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  fetchCloudTeamRatings,
-  idleHealth,
-  isCloudTierConfigured,
-  probeCloudTier,
-  type CloudTeamRating,
-  type CloudTierHealth } from
-'../utils/supabaseTier';
+import { fetchCloudTeamRatings, idleHealth, isCloudTierConfigured, probeCloudTier,
+  type CloudTeamRating, type CloudTierHealth } from '../utils/supabaseTier';
 import type { League } from '../types/winmix';
-
 export interface CloudTierState {
-  health: CloudTierHealth;
-  configured: boolean;
-  ratings: CloudTeamRating[];
-  loadingRatings: boolean;
-  /** Re-probe reachability. Safe to call when unconfigured (no-op result). */
-  refresh: () => Promise<void>;
-  /** Clears the sticky degrade and probes again (after fixing credentials). */
-  retry: () => Promise<void>;
-  /** Advisory read of `view_team_ratings`; degrades instead of throwing. */
-  loadRatings: (league: League) => Promise<void>;
+  health: CloudTierHealth; configured: boolean; ratings: CloudTeamRating[]; loadingRatings: boolean;
+  refresh: () => Promise<void>; retry: () => Promise<void>; loadRatings: (league: League) => Promise<void>;
 }
-
-/**
- * The cloud tier lives entirely outside the pipeline: it probes reachability,
- * exposes an advisory ratings read, and degrades to local-only for the rest of
- * the session on the first failure. Nothing here can block or break the app.
- */
 export function useCloudTier(): CloudTierState {
   const [health, setHealth] = useState<CloudTierHealth>(() => idleHealth());
   const [ratings, setRatings] = useState<CloudTeamRating[]>([]);
   const [loadingRatings, setLoadingRatings] = useState(false);
-  const degradedRef = useRef(false);
-
-  const refresh = useCallback(async () => {
-    if (degradedRef.current) return;
-    const next = await probeCloudTier();
-    if (next.degraded) degradedRef.current = true;
-    setHealth(next);
-  }, []);
-
-  const retry = useCallback(async () => {
-    degradedRef.current = false;
+  const mounted = useRef(false), degraded = useRef(false), healthVersion = useRef(0), ratingsVersion = useRef(0);
+  const check = useCallback(async (force: boolean) => {
+    if (!force && degraded.current) return;
+    const version = ++healthVersion.current;
+    if (force) { degraded.current = false; ++ratingsVersion.current; setRatings([]); setLoadingRatings(false); }
     setHealth(idleHealth());
     const next = await probeCloudTier();
-    if (next.degraded) degradedRef.current = true;
-    setHealth(next);
+    if (!mounted.current || version !== healthVersion.current) return;
+    degraded.current = next.degraded; setHealth(next);
   }, []);
-
+  const refresh = useCallback(() => check(false), [check]);
+  const retry = useCallback(() => check(true), [check]);
   useEffect(() => {
-    void refresh();
+    mounted.current = true; void refresh();
+    return () => { mounted.current = false; ++healthVersion.current; ++ratingsVersion.current; };
   }, [refresh]);
-
   const loadRatings = useCallback(async (league: League) => {
-    if (degradedRef.current || !isCloudTierConfigured()) return;
-    setLoadingRatings(true);
+    if (degraded.current || !isCloudTierConfigured()) return;
+    const version = ++ratingsVersion.current;
+    setRatings([]); setLoadingRatings(true);
     try {
-      setRatings(await fetchCloudTeamRatings(league));
-    } catch (e) {
-      degradedRef.current = true;
-      setRatings([]);
-      setHealth({
-        status: 'degraded',
-        degraded: true,
-        lastError: e instanceof Error ? e.message : String(e),
-        checkedAt: new Date().toISOString()
-      });
+      const rows = await fetchCloudTeamRatings(league);
+      if (mounted.current && version === ratingsVersion.current) setRatings(rows);
+    } catch (error) {
+      if (!mounted.current || version !== ratingsVersion.current) return;
+      ++healthVersion.current; degraded.current = true; setRatings([]);
+      setHealth({ status: 'degraded', degraded: true, lastError: error instanceof Error ? error.message : String(error),
+        checkedAt: new Date().toISOString() });
     } finally {
-      setLoadingRatings(false);
+      if (mounted.current && version === ratingsVersion.current) setLoadingRatings(false);
     }
   }, []);
-
-  return {
-    health,
-    configured: isCloudTierConfigured(),
-    ratings,
-    loadingRatings,
-    refresh,
-    retry,
-    loadRatings
-  };
+  return { health, configured: isCloudTierConfigured(), ratings, loadingRatings, refresh, retry, loadRatings };
 }

@@ -1,23 +1,46 @@
-// WinMix season ingest — auto-creates teams, no admin token required.
+
+// WinMix ingest v2 — operator token required; atomic team/season/match/stat writes.
 // Hosted edge functions inject SUPABASE_SECRET_KEYS (JSON map) and SUPABASE_URL.
 import { createClient } from "npm:@supabase/supabase-js@2.95.0";
-import { corsHeaders } from "npm:@supabase/supabase-js@2.95.0/cors";
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info, x-winmix-ingest-token",
+};
+const BUILD = "winmix-ingest-20261004-v2";
+// OPTIONS must never resolve secrets or create a database client.
+async function authorizeImport(req: Request): Promise<void> {
+  const expected = Deno.env.get("WINMIX_INGEST_TOKEN") ?? "";
+  if (!/^[a-f0-9]{64}$/i.test(expected)) throw new HttpError(503, "WINMIX_INGEST_TOKEN nincs konfigurálva (64 hex karakter szükséges)");
+  const actual = req.headers.get("x-winmix-ingest-token") ?? "";
+  if (!/^[a-f0-9]{64}$/i.test(actual)) throw new HttpError(401, "Érvényes importtoken szükséges");
+  const digest = async (v: string) => new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v)));
+  const [a, b] = await Promise.all([digest(actual), digest(expected)]);
+  let difference = 0;
+  for (let i = 0; i < a.length; i++) difference |= a[i] ^ b[i];
+  if (difference !== 0) throw new HttpError(403, "Az importtoken érvénytelen");
+}
 
-/** Resolve the service-role key from any of the injected env formats. */
+/** Named injected secret; never assume its name is service_role. */
 function getServiceRoleKey(): string {
-  // Hosted: SUPABASE_SECRET_KEYS is a JSON map like {"service_role": "sb_secret_..."} or {"secret_key": ...}
   const raw = Deno.env.get("SUPABASE_SECRET_KEYS");
+  const requested = Deno.env.get("WINMIX_SECRET_KEY_NAME")?.trim();
   if (raw) {
-    try {
-      const map = JSON.parse(raw) as Record<string, string>;
-      const key = map["service_role"] ?? map["secret_key"] ?? map["SECRET_KEY"];
-      if (typeof key === "string" && key) return key;
-    } catch { /* fall through */ }
+    let parsed: unknown;
+    try { parsed = JSON.parse(raw); }
+    catch { throw new HttpError(503, "SUPABASE_SECRET_KEYS: hibás JSON-konfiguráció"); }
+    if (!object(parsed)) throw new HttpError(503, "SUPABASE_SECRET_KEYS: objektum szükséges");
+    const entries = Object.entries(parsed).filter((entry): entry is [string, string] =>
+      typeof entry[1] === "string" && entry[1].startsWith("sb_secret_"));
+    const name = requested ?? (entries.some(([n]) => n === "default") ? "default" : entries.length === 1 ? entries[0][0] : undefined);
+    const key = name ? parsed[name] : undefined;
+    if (typeof key === "string" && key.startsWith("sb_secret_")) return key;
+    throw new HttpError(503, "Állítsd be a WINMIX_SECRET_KEY_NAME változót a projekt kulcsnevére");
   }
-  // Fallback for local / older config
-  const direct = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SECRET_KEY");
-  if (typeof direct === "string" && direct) return direct;
-  throw new Error("Service role key not found in SUPABASE_SECRET_KEYS or SUPABASE_SERVICE_ROLE_KEY");
+  if (requested) throw new HttpError(503, "A megadott kulcsnévhez hiányzik SUPABASE_SECRET_KEYS");
+  const direct = Deno.env.get("SUPABASE_SECRET_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (direct?.trim()) return direct.trim();
+  throw new HttpError(503, "Hiányzó szerveroldali Supabase-kulcs");
 }
 
 const LIMITS = { bytes: 4 * 1024 * 1024, seasons: 5, matches: 2000, errors: 100 };
@@ -34,7 +57,7 @@ type RowError = { season: string; matchNo: number; match: string; reason: string
 type MatchRow = {
   league: League; match_no: number; source_file_id: string | null;
   row_index: number | null; kickoff_iso: string | null; match_date_raw: string | null;
-  home_team_id: string; away_team_id: string; home_score: number; away_score: number;
+  home_team_key: string; away_team_key: string; home_team_name: string; away_team_name: string; home_score: number; away_score: number;
   ht_home_score: number | null; ht_away_score: number | null;
 };
 class HttpError extends Error {
@@ -168,86 +191,35 @@ Deno.serve(async (req: Request) => {
   const requestId = crypto.randomUUID();
   const headers = new Headers({
     ...corsHeaders,
-    "Access-Control-Expose-Headers": "X-Request-Id",
+    "Access-Control-Expose-Headers": "X-Request-Id, X-WinMix-Build",
     "Access-Control-Max-Age": "600",
     "Vary": "Origin",
     "Cache-Control": "no-store",
     "X-Request-Id": requestId,
+    "X-WinMix-Build": BUILD,
   });
   const json = (body: unknown, status = 200) => {
     const h = new Headers(headers); h.set("Content-Type", "application/json; charset=utf-8");
-    return new Response(JSON.stringify({ requestId, ...(object(body) ? body : { data: body }) }), { status, headers: h });
+    return new Response(JSON.stringify({ requestId, build: BUILD, ...(object(body) ? body : { data: body }) }), { status, headers: h });
   };
-  if (req.method === "OPTIONS") return Response.json({ ok: true }, { headers });
+  if (req.method === "OPTIONS") return Response.json({ ok: true, build: BUILD }, { headers });
   if (req.method !== "POST") { headers.set("Allow", "POST, OPTIONS"); return json({ success: false, error: "Csak POST támogatott" }, 405); }
   try {
+    await authorizeImport(req);
     const url = Deno.env.get("SUPABASE_URL");
-    if (!url) throw new HttpError(500, "Hiányzó SUPABASE_URL");
+    if (!url || new URL(url).hostname !== "dpmyxypqcsugycqhifaf.supabase.co") throw new HttpError(503, "A funkció nem a célprojektben fut");
     const key = getServiceRoleKey();
     const input = parsePayload(await readJson(req));
     const admin = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
     const stats = { seasons: 0, matches: 0, rejected: 0, repaired: 0, errors: [] as string[], rowErrors: [] as RowError[] };
     const usedTeams = new Set<string>();
-    const teamCache = new Map<League, Map<string, string>>();
     const results: Obj[] = [];
-
-    // Auto-create any missing teams before processing matches.
-    for (const season of input.seasons) {
-      if (teamCache.has(season.league)) continue;
-      const { data: existing, error: e1 } = await admin.from("winmix_teams")
-        .select("id, canonical_key, display_name").eq("league", season.league);
-      if (e1) { console.error(JSON.stringify({ requestId, stage: "teams", code: e1.code, message: e1.message })); throw new Error("A csapattábla nem olvasható"); }
-      const map = new Map<string, string>();
-      for (const team of existing ?? []) {
-        for (const name of [team.canonical_key, team.display_name]) {
-          if (typeof name !== "string") continue;
-          const k = canon(name);
-          if (k) map.set(k, team.id);
-        }
-      }
-
-      // Collect all unique team names from this season's matches.
-      const newTeams = new Map<string, string>(); // canonical -> display name
-      for (const s of input.seasons.filter(s => s.league === season.league)) {
-        for (const raw of s.matches) {
-          if (!object(raw)) continue;
-          const homeName = typeof raw.home_team === "string" ? raw.home_team.trim() : "";
-          const awayName = typeof raw.away_team === "string" ? raw.away_team.trim() : "";
-          for (const name of [homeName, awayName]) {
-            if (!name) continue;
-            const aliasMap = input.aliases.get(season.league);
-            const k = canon(name);
-            const resolved = aliasMap?.get(k) ?? k;
-            if (!map.has(resolved) && !newTeams.has(resolved)) {
-              newTeams.set(resolved, name);
-            }
-          }
-        }
-      }
-
-      // Insert missing teams.
-      if (newTeams.size > 0) {
-        const rows = [...newTeams.entries()].map(([ck, dn]) => ({
-          league: season.league, canonical_key: ck, display_name: dn, weight_index: 50,
-        }));
-        const { data: inserted, error: e2 } = await admin.from("winmix_teams")
-          .upsert(rows, { onConflict: "league,canonical_key" }).select("id, canonical_key, display_name");
-        if (e2) { console.error(JSON.stringify({ requestId, stage: "teams-insert", code: e2.code, message: e2.message })); throw new Error("Új csapatok létrehozása sikertelen"); }
-        for (const team of inserted ?? []) {
-          const ck = typeof team.canonical_key === "string" ? canon(team.canonical_key) : "";
-          if (ck) map.set(ck, team.id);
-        }
-      }
-
-      teamCache.set(season.league, map);
-    }
 
     for (const season of input.seasons) {
       try {
-        const teams = teamCache.get(season.league)!;
         const resolve = (name: string) => {
-          const k = canon(name), alias = input.aliases.get(season.league)!.get(k);
-          return teams.get(alias ?? k);
+          const key = canon(name);
+          return input.aliases.get(season.league)!.get(key) ?? key;
         };
         const rows: MatchRow[] = [];
         let rejected = 0, repaired = 0, previousTime: number | null = null;
@@ -256,7 +228,7 @@ Deno.serve(async (req: Request) => {
             if (!object(raw)) throw new Error("A mérkőzés nem objektum");
             const home = text(raw.home_team, "home_team"), away = text(raw.away_team, "away_team");
             const homeId = resolve(home), awayId = resolve(away);
-            if (!homeId || !awayId) throw new Error(`Ismeretlen csapat: ${!homeId ? home : away}`);
+            if (!homeId || !awayId) throw new Error("Üres csapatkulcs");
             if (homeId === awayId) throw new Error("A hazai és vendég csapat azonos");
             const score = checkScores(raw), iso = kickoff(raw.kickoffIso);
             const row: MatchRow = {
@@ -264,7 +236,7 @@ Deno.serve(async (req: Request) => {
               source_file_id: optionalText(raw.sourceFileId, "sourceFileId"),
               row_index: raw.rowIndex == null ? null : integer(raw.rowIndex, "rowIndex", 0, 2147483647),
               kickoff_iso: iso, match_date_raw: optionalText(raw.date, "date", 128),
-              home_team_id: homeId, away_team_id: awayId, home_score: score.home, away_score: score.away,
+              home_team_key: homeId, away_team_key: awayId, home_team_name: home, away_team_name: away, home_score: score.home, away_score: score.away,
               ht_home_score: score.htHome, ht_away_score: score.htAway,
             };
             if (season.orderMode === "chronological") {
@@ -287,17 +259,17 @@ Deno.serve(async (req: Request) => {
           results.push({ league: season.league, seasonIndex: season.seasonIndex, status: "rejected", saved: 0, rejected });
           continue;
         }
-        const { data, error } = await admin.rpc("winmix_ingest_season_v1", {
+        const { data, error } = await admin.rpc("winmix_ingest_season_v2", {
           p_season: { league: season.league, season_index: season.seasonIndex, name: season.name,
             file_name: season.fileName, content_hash: input.mode === "replace" ? season.contentHash : null,
             order_mode: season.orderMode }, p_matches: rows, p_mode: input.mode,
         });
         if (error) {
-          console.error(JSON.stringify({ requestId, stage: "commit", league: season.league, seasonIndex: season.seasonIndex, code: error.code, message: error.message }));
+          console.error(JSON.stringify({ requestId, build: BUILD, stage: "commit", league: season.league, seasonIndex: season.seasonIndex, code: error.code, message: error.message }));
           throw new Error("A tranzakciós szezonmentés sikertelen; ellenőrizd az RPC-t és a szervernaplót");
         }
         stats.seasons++; stats.matches += rows.length; stats.repaired += repaired;
-        for (const row of rows) { usedTeams.add(row.home_team_id); usedTeams.add(row.away_team_id); }
+        for (const row of rows) { usedTeams.add(`${row.league}:${row.home_team_key}`); usedTeams.add(`${row.league}:${row.away_team_key}`); }
         results.push({ league: season.league, seasonIndex: season.seasonIndex, status: rejected ? "partial" : "saved",
           saved: rows.length, rejected, repaired, database: data });
       } catch (error) {
@@ -311,7 +283,7 @@ Deno.serve(async (req: Request) => {
       ...stats, rowErrorsTruncated: stats.rejected > stats.rowErrors.length, results }, status);
   } catch (error) {
     if (error instanceof HttpError) return json({ success: false, partial: false, error: error.message }, error.status);
-    console.error(JSON.stringify({ requestId, stage: "request", error: "Unhandled failure" }));
+    console.error(JSON.stringify({ requestId, build: BUILD, stage: "request", error: "Unhandled failure" }));
     return json({ success: false, partial: false, error: "Váratlan szerverhiba; azonosító alapján ellenőrizd a naplót" }, 500);
   }
 });

@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Cloud, CloudOff, RefreshCw, Upload } from 'lucide-react';
 import { useCloudTierContext } from '../../../contexts/CloudTierContext';
-import { cloudEndpointSummary, lastRatingsSource, type IngestResult } from '../../../utils/supabaseTier';
+import { cloudEndpointSummary, type IngestResult } from '../../../utils/supabaseTier';
 import { CROSSCHECK_TOLERANCE, type CrossCheckRow } from '../../../hooks/useOpsActions';
 import type { League } from '../../../types/winmix';
 import { DataGrid, type GridColumn } from '../DataGrid';
@@ -61,7 +61,7 @@ export function CloudTierTab({
       align: 'center',
       secondary: true,
       cell: (r) =>
-      <Chip tone={r.agrees ? 'signal' : 'neutral'}>{r.agrees ? 'egyezik' : 'eltérés'}</Chip>
+      <Chip tone={r.agrees ? 'signal' : 'neutral'}>{!r.comparable ? 'nem összevethető' : r.agrees ? 'egyezik' : 'eltérés'}</Chip>
 
     }],
 
@@ -83,7 +83,7 @@ export function CloudTierTab({
 
             <CloudOff className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
             }
-            Felhő tier — csak olvasás, opcionális
+            Felhő tier — olvasás és védett import
           </PanelTitle>
           <PanelSubtitle>
             {cloud.health.status === 'online' ?
@@ -143,7 +143,7 @@ export function CloudTierTab({
       null}
 
       <p className="border-b border-border px-3 py-3 text-ui-xs leading-relaxed text-muted-foreground sm:px-4">
-        Olvasáskor a böngésző csak a nyilvános kulcsot használja; a feltöltés a szerveren fut a titkos kulccsal.
+        Olvasáskor a böngésző csak a nyilvános kulcsot használja; a feltöltéshez külön importtoken szükséges, a szerver saját titkos kulcsát a böngésző nem kapja meg.
         Az alkalmazás állapota továbbra is a helyi tárolóban él (karantén + JSON export/import a
         katasztrófa-visszaállítás útja). Az itt látott SQL-oldali számok{' '}
         <strong>tájékoztató jellegűek</strong>: keresztellenőrzésre szolgálnak, sosem kerülnek be a
@@ -156,10 +156,13 @@ export function CloudTierTab({
             `Feltöltve: ${ingestResult.seasons} szezon, ${ingestResult.teams} csapat, ${ingestResult.matches} mérkőzés` +
             (ingestResult.rejected > 0 ? `, ${ingestResult.rejected} elutasítva` : '') +
             (ingestResult.repaired > 0 ? `, ${ingestResult.repaired} javítva` : '') :
-            `Hiba: ${ingestResult.errors.join('; ')}`}
+            `${ingestResult.partial ? `Részleges feltöltés: ${ingestResult.seasons} szezon, ${ingestResult.matches} mérkőzés. ` : ''}Hiba: ${ingestResult.errors.join('; ')}`}
         </div>
       ) : null}
-      {ingestResult?.rowErrors ? (
+      {ingestResult?.requestIds?.length ? <p className="px-3 py-2 text-ui-xs text-muted-foreground">
+        Kérésazonosítók: {ingestResult.requestIds.join(', ')}
+      </p> : null}
+      {ingestResult?.rowErrors?.length ? (
         <div className="max-h-72 overflow-auto border-b border-border px-3 py-2 sm:px-4">
           <p className="mb-1 text-ui-xs font-bold text-foreground">Kihagyott sorok ({ingestResult.rowErrors.length})</p>
           <table className="w-full text-ui-xs">
@@ -177,11 +180,10 @@ export function CloudTierTab({
           </table>
         </div>
       ) : null}
-      {crossCheck.length > 0 && lastRatingsSource === 'team_season_stats' ? (
-        <p className="border-b border-border px-3 py-2 text-ui-xs text-muted-foreground sm:px-4">
-          Forrás: <code className="font-mono">winmix_team_season_stats</code> (a <code className="font-mono">view_team_ratings</code> nézet még nincs létrehozva) — a hazai és vendég érték itt az összesített gólkülönbség.
-        </p>
-      ) : null}
+      {crossCheck.length > 0 ? <p className="px-3 py-2 text-ui-xs text-muted-foreground">
+        SQL v2: átlagos hazai/vendég gólkülönbség, minden felhős szezonból. A helyi modell eltérő képletet vagy mintát használhat; az egyezés nincs igazolva.
+      </p> : null}
+
 
       <DataGrid
         columns={columns}
@@ -191,8 +193,7 @@ export function CloudTierTab({
         collapseBelow="md"
         empty={
         <>
-            Nincs betöltött SQL értékelés. Ha betöltés után is üres: a mérkőzés- és statisztikatáblák még
-            üresek — kattints a <strong>Szezonok feltöltése a felhőbe</strong> gombra.
+            Nincs betöltött SQL értékelés. Ha betöltés után is üres: ellenőrizd a kapcsolat állapotát és a v2 migrációt; az adatbázis RLS miatt is adhat üres választ. Ha még nincs importált adat — kattints a <strong>Szezonok feltöltése a felhőbe</strong> gombra.
             Tolerancia: {CROSSCHECK_TOLERANCE}.
           </>
         } />

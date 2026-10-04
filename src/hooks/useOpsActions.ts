@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useCloudTierContext } from '../contexts/CloudTierContext';
 import { useDialogs } from '../contexts/DialogContext';
 import { useWinmix } from '../contexts/WinmixContext';
@@ -30,6 +30,7 @@ export interface CrossCheckRow {
   tsNetHome: number | null;
   tsNetAway: number | null;
   agrees: boolean;
+  comparable: boolean;
 }
 
 /** Divergence above this between the SQL view and the TS walk is a red flag. */
@@ -63,6 +64,7 @@ export function useOpsActions() {
    */
   const [preApplySnapshot, setPreApplySnapshot] = useState<Record<string, number> | null>(null);
   const [autoAppliedKeys, setAutoAppliedKeys] = useState<Set<string>>(() => new Set());
+  const ingestLock = useRef(false);
   const [ingesting, setIngesting] = useState(false);
   const [ingestResult, setIngestResult] = useState<IngestResult | null>(null);
 
@@ -159,7 +161,7 @@ export function useOpsActions() {
 
   const crossCheck = useMemo<CrossCheckRow[]>(() => {
     if (cloud.ratings.length === 0) return [];
-    return cloud.ratings.
+    return cloud.ratings.filter((r) => r.league === currentLeague).
     map((r) => {
       const local = auto[r.canonicalKey] ?? null;
       const worst = local ?
@@ -172,13 +174,15 @@ export function useOpsActions() {
         sqlNetAway: r.netAway,
         tsNetHome: local ? local.netHome : null,
         tsNetAway: local ? local.netAway : null,
-        agrees: local !== null && worst <= CROSSCHECK_TOLERANCE
+        comparable: r.comparable,
+        agrees: r.comparable && local !== null && worst <= CROSSCHECK_TOLERANCE
       };
     }).
     sort((a, b) => a.displayName.localeCompare(b.displayName, 'hu'));
-  }, [cloud.ratings, auto]);
+  }, [cloud.ratings, auto, currentLeague]);
 
   const ingestToCloud = useCallback(async () => {
+    if (ingestLock.current) return;
     if (seasons.length === 0) {
       await dialogs.alert('Nincsenek betöltött szezonok a feltöltéshez.');
       return;
@@ -189,10 +193,17 @@ export function useOpsActions() {
     );
     if (!ok) return;
 
+    if (ingestLock.current) return;
+    // Runtime operator credential; never stored in localStorage, source, or VITE_ env.
+    const importToken = window.prompt('Add meg a 64 karakteres WinMix importtokent (nem a Supabase titkos kulcsot):')?.trim();
+    if (!importToken) return;
+    if (!/^[a-f0-9]{64}$/i.test(importToken)) { await dialogs.alert('64 hex karakteres importtoken szükséges.'); return; }
+    ingestLock.current = true;
     setIngesting(true);
     setIngestResult(null);
     try {
       const result = await ingestSeasonsToCloud({
+        importToken,
         seasons: seasons.map((s) => ({
           id: s.id,
           league: s.league,
@@ -201,7 +212,7 @@ export function useOpsActions() {
           fileName: s.fileName,
           createdAt: s.createdAt,
           contentHash: s.contentHash,
-          orderMode: s.orderMode ?? 'chronological',
+          orderMode: s.orderMode ?? 'source-order',
           matches: s.matches.map((m) => ({
             match_no: m.match_no,
             date: m.date,
@@ -220,10 +231,14 @@ export function useOpsActions() {
         teamAliasMap,
       });
       setIngestResult(result);
-      if (result.success) {
+      if (result.seasons > 0) {
         await cloud.loadRatings(currentLeague);
       }
+    } catch (error) {
+      setIngestResult({ success: false, seasons: 0, teams: 0, matches: 0, rejected: 0, repaired: 0,
+        errors: [error instanceof Error ? error.message : String(error)] });
     } finally {
+      ingestLock.current = false;
       setIngesting(false);
     }
   }, [seasons, teamWeights, teamAliasMap, dialogs, cloud, currentLeague]);
