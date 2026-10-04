@@ -1,7 +1,22 @@
 import React, { createContext, useContext } from 'react';
 import { useCloudTier, type CloudTierState } from '../hooks/useCloudTier';
 
-const CloudTierContext = createContext<CloudTierState | null>(null);
+// HMR-stable context: on module reload the mounted provider would otherwise
+// reference the old context instance and consumers would read `null`.
+const GLOBAL_KEY = '__winmix_cloud_tier_context__';
+const globalStore = globalThis as typeof globalThis & {
+  [GLOBAL_KEY]?: React.Context<CloudTierState | null>;
+};
+
+const CloudTierContext: React.Context<CloudTierState | null> =
+  globalStore[GLOBAL_KEY] ?? createContext<CloudTierState | null>(null);
+globalStore[GLOBAL_KEY] = CloudTierContext;
+
+if (import.meta.hot) {
+  import.meta.hot.accept(() => {
+    import.meta.hot?.invalidate();
+  });
+}
 
 /**
  * The optional Supabase read tier. Deliberately a sibling of WinmixProvider,
