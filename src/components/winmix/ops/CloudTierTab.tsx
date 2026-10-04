@@ -3,6 +3,7 @@ import { Cloud, CloudOff, RefreshCw, Upload } from 'lucide-react';
 import { useCloudTierContext } from '../../../contexts/CloudTierContext';
 import { cloudEndpointSummary, lastRatingsSource, type IngestResult } from '../../../utils/supabaseTier';
 import { AdminTokenField, RowErrorTable, SchemaAnalyzer } from './CloudAdminTools';
+import { SeasonAuditTool } from './SeasonAuditTool';
 import { CROSSCHECK_TOLERANCE, type CrossCheckRow } from '../../../hooks/useOpsActions';
 import type { League } from '../../../types/winmix';
 import { DataGrid, type GridColumn } from '../DataGrid';
@@ -163,6 +164,7 @@ export function CloudTierTab({
       {ingestResult?.rowErrors ? <RowErrorTable rows={ingestResult.rowErrors} /> : null}
       <AdminTokenField />
       <SchemaAnalyzer />
+      <SeasonAuditTool />
       {crossCheck.length > 0 && lastRatingsSource === 'team_season_stats' ? (
         <p className="border-b border-border px-3 py-2 text-ui-xs text-muted-foreground sm:px-4">
           Forrás: <code className="font-mono">winmix_team_season_stats</code> (a <code className="font-mono">view_team_ratings</code> nézet még nincs létrehozva) — a hazai és vendég érték itt az összesített gólkülönbség.
