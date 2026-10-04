@@ -1,4 +1,3 @@
-BEGIN;
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON
   public.winmix_teams, public.winmix_seasons, public.winmix_matches, public.winmix_team_season_stats
@@ -122,4 +121,3 @@ SELECT t.canonical_key, t.display_name, t.league, count(a.team_id) AS total_play
 FROM public.winmix_teams t LEFT JOIN appearances a ON a.team_id=t.id AND a.league=t.league GROUP BY t.id;
 GRANT SELECT ON public.view_team_ratings, public.view_team_ratings_v2 TO anon, authenticated, service_role;
 NOTIFY pgrst, 'reload schema';
-COMMIT;
