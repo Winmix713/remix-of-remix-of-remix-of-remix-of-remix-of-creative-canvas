@@ -1,5 +1,5 @@
 
-// WinMix ingest v2 — operator token required; atomic team/season/match/stat writes.
+// WinMix ingest v3 — operator token required; atomic versioned team/season/match writes.
 // Hosted edge functions inject SUPABASE_SECRET_KEYS (JSON map) and SUPABASE_URL.
 import { createClient } from "npm:@supabase/supabase-js@2.95.0";
 const corsHeaders = {
@@ -7,7 +7,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info, x-winmix-ingest-token",
 };
-const BUILD = "winmix-ingest-20261004-v2";
+const BUILD = "winmix-ingest-20261004-v3";
 // OPTIONS must never resolve secrets or create a database client.
 async function authorizeImport(req: Request): Promise<void> {
   const expected = Deno.env.get("WINMIX_INGEST_TOKEN") ?? "";
@@ -43,7 +43,7 @@ function getServiceRoleKey(): string {
   throw new HttpError(503, "Hiányzó szerveroldali Supabase-kulcs");
 }
 
-const LIMITS = { bytes: 4 * 1024 * 1024, seasons: 5, matches: 2000, errors: 100 };
+const LIMITS = { bytes: 4 * 1024 * 1024, seasons: 5, matches: 1200, errors: 100 };
 const MAX_GOALS = 20;
 type Obj = Record<string, unknown>;
 type League = "angol" | "spanyol";
@@ -117,6 +117,10 @@ function checkScores(m: Obj) {
 function parsePayload(payload: unknown) {
   if (!object(payload) || !Array.isArray(payload.seasons) || payload.seasons.length === 0 ||
     payload.seasons.length > LIMITS.seasons) throw new HttpError(400, `1–${LIMITS.seasons} szezon szükséges`);
+  const dataVersionId = payload.dataVersionId;
+  if (typeof dataVersionId !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(dataVersionId)) {
+    throw new HttpError(400, "Létező draft dataVersionId szükséges");
+  }
   const mode = payload.mode ?? "merge";
   if (mode !== "merge" && mode !== "replace") throw new HttpError(400, "mode: merge vagy replace szükséges");
   if (payload.allowPartial !== undefined && typeof payload.allowPartial !== "boolean") {
@@ -134,6 +138,7 @@ function parsePayload(payload: unknown) {
     if (seen.has(key)) throw new HttpError(400, `Ismétlődő szezon: ${key}`);
     seen.add(key);
     if (!Array.isArray(s.matches) || !s.matches.length) throw new HttpError(400, `${key}: nem üres matches tömb szükséges`);
+    if (s.matches.length > 240) throw new HttpError(413, `${key}: legfeljebb 240 mérkőzés szükséges`);
     total += s.matches.length;
     if (total > LIMITS.matches) throw new HttpError(413, `Legfeljebb ${LIMITS.matches} mérkőzés küldhető egyszerre`);
     if (s.orderMode !== "source-order" && s.orderMode !== "chronological") {
@@ -156,7 +161,7 @@ function parsePayload(payload: unknown) {
     }
     aliases.set(league, map);
   }
-  return { seasons, aliases, mode: mode as Mode, allowPartial };
+  return { seasons, aliases, mode: mode as Mode, allowPartial, dataVersionId };
 }
 async function readJson(req: Request): Promise<unknown> {
   if (!/^application\/json(?:\s*;|$)/i.test(req.headers.get("content-type") ?? "")) {
@@ -259,13 +264,16 @@ Deno.serve(async (req: Request) => {
           results.push({ league: season.league, seasonIndex: season.seasonIndex, status: "rejected", saved: 0, rejected });
           continue;
         }
-        const { data, error } = await admin.rpc("winmix_ingest_season_v2", {
-          p_season: { league: season.league, season_index: season.seasonIndex, name: season.name,
-            file_name: season.fileName, content_hash: input.mode === "replace" ? season.contentHash : null,
+        const { data, error } = await admin.rpc("winmix_ingest_season_v3", {
+          p_season: { data_version_id: input.dataVersionId, league: season.league, season_index: season.seasonIndex, name: season.name,
+            file_name: season.fileName ?? "winmix-upload.json", content_hash: input.mode === "replace" ? season.contentHash : null,
             order_mode: season.orderMode }, p_matches: rows, p_mode: input.mode,
         });
         if (error) {
           console.error(JSON.stringify({ requestId, build: BUILD, stage: "commit", league: season.league, seasonIndex: season.seasonIndex, code: error.code, message: error.message }));
+          if (["P0001", "23514", "23503", "22P02"].includes(error.code)) {
+            throw new HttpError(422, `Import elutasítva: ${error.message}`);
+          }
           throw new Error("A tranzakciós szezonmentés sikertelen; ellenőrizd az RPC-t és a szervernaplót");
         }
         stats.seasons++; stats.matches += rows.length; stats.repaired += repaired;
@@ -274,11 +282,11 @@ Deno.serve(async (req: Request) => {
           saved: rows.length, rejected, repaired, database: data });
       } catch (error) {
         stats.errors.push(`Szezon "${season.name}": ${error instanceof Error ? error.message : "Ismeretlen hiba"}`);
-        results.push({ league: season.league, seasonIndex: season.seasonIndex, status: "failed", saved: 0 });
+        results.push({ league: season.league, seasonIndex: season.seasonIndex, status: error instanceof HttpError && error.status === 422 ? "rejected" : "failed", saved: 0 });
       }
     }
     const success = stats.errors.length === 0 && stats.rejected === 0;
-    const status = success ? 200 : stats.seasons > 0 ? 207 : stats.rejected > 0 && results.every(r => r.status === "rejected") ? 422 : 500;
+    const status = success ? 200 : stats.seasons > 0 ? 207 : results.length > 0 && results.every(r => r.status === "rejected") ? 422 : 500;
     return json({ success, partial: !success && stats.seasons > 0, mode: input.mode, teams: usedTeams.size,
       ...stats, rowErrorsTruncated: stats.rejected > stats.rowErrors.length, results }, status);
   } catch (error) {

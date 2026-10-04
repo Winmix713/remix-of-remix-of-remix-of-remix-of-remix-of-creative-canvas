@@ -91,7 +91,7 @@ export function CloudTierTab({
             cloud.health.status === 'probing' ?
             'kapcsolat ellenőrzése…' :
             cloud.health.status === 'unconfigured' ?
-            'nincs konfigurálva (VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY)' :
+            'nincs konfigurálva (Supabase URL, nyilvános kulcs vagy adateverzió UUID)' :
             `helyi módra váltva — ${cloud.health.lastError ?? 'elérhetetlen'}`}
           </PanelSubtitle>
         </div>
@@ -181,7 +181,7 @@ export function CloudTierTab({
         </div>
       ) : null}
       {crossCheck.length > 0 ? <p className="px-3 py-2 text-ui-xs text-muted-foreground">
-        SQL v2: átlagos hazai/vendég gólkülönbség, minden felhős szezonból. A helyi modell eltérő képletet vagy mintát használhat; az egyezés nincs igazolva.
+        SQL v3: átlagos hazai/vendég gólkülönbség, a kiválasztott adateverzió szezonjaiból. A helyi modell eltérő képletet vagy mintát használhat; az egyezés nincs igazolva.
       </p> : null}
 
 
@@ -193,7 +193,7 @@ export function CloudTierTab({
         collapseBelow="md"
         empty={
         <>
-            Nincs betöltött SQL értékelés. Ha betöltés után is üres: ellenőrizd a kapcsolat állapotát és a v2 migrációt; az adatbázis RLS miatt is adhat üres választ. Ha még nincs importált adat — kattints a <strong>Szezonok feltöltése a felhőbe</strong> gombra.
+            Nincs betöltött SQL értékelés. Ha betöltés után is üres: ellenőrizd a kapcsolat állapotát és a v3 migrációt és a kiválasztott adateverziót; az adatbázis RLS miatt is adhat üres választ. Ha még nincs importált adat — kattints a <strong>Szezonok feltöltése a felhőbe</strong> gombra.
             Tolerancia: {CROSSCHECK_TOLERANCE}.
           </>
         } />

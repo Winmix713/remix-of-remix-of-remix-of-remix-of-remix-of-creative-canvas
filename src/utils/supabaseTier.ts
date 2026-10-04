@@ -137,11 +137,13 @@ export async function probeCloudTier(): Promise<CloudTierHealth> {
     };
   }
   try {
+    const env = readEnv();
+    if (!env?.dataVersionId) throw new Error('VITE_WINMIX_DATA_VERSION_ID nincs beállítva.');
     // Probe the view the cross-check actually reads. A 404 only means the view
     // is not deployed yet, so fall back to the REST root to prove reachability.
     // A 401/403 is a real credential/RLS/GRANT problem and must not be masked.
     try {
-      await restGet('view_team_ratings_v2?select=canonical_key&limit=1');
+      await restGet(`view_team_ratings_v3?data_version_id=eq.${encodeURIComponent(env.dataVersionId)}&select=canonical_key&limit=1`);
     } catch (e) {
       throw e; // Missing ratings migration must be visible; reachability alone is insufficient.
     }
@@ -178,13 +180,15 @@ function num(value: unknown): number {
 export type RatingsSource = 'view' | 'team_season_stats' | 'none';
 export let lastRatingsSource: RatingsSource = 'none';
 
-/** v2 uses mean goal differential for actual home and away appearances.
+/** v3 uses mean goal differential for actual home and away appearances.
  * Local autoWeights formula/scope was not supplied, so equality is not asserted.
  */
 export async function fetchCloudTeamRatings(league: League): Promise<CloudTeamRating[]> {
   lastRatingsSource = 'none';
+  const env = readEnv();
+  if (!env?.dataVersionId) throw new Error('VITE_WINMIX_DATA_VERSION_ID nincs beállítva.');
   const raw = await restGet(
-    `view_team_ratings_v2?league=eq.${encodeURIComponent(league)}&select=canonical_key,display_name,total_played,net_home,net_away,ppg,auto_weight_index&order=canonical_key.asc`, true
+    `view_team_ratings_v3?data_version_id=eq.${encodeURIComponent(env.dataVersionId)}&league=eq.${encodeURIComponent(league)}&select=canonical_key,display_name,total_played,net_home,net_away,ppg,auto_weight_index&order=canonical_key.asc`, true
   );
   if (!Array.isArray(raw)) throw new Error('Hibás SQL-értékelési válasz.');
   lastRatingsSource = raw.length ? 'view' : 'none';
@@ -259,6 +263,7 @@ export async function ingestSeasonsToCloud(params: {
   });
   const env = readEnv();
   if (!env) return fail('A felhő tier nincs konfigurálva.');
+  if (!env.dataVersionId) return fail('VITE_WINMIX_DATA_VERSION_ID szükséges: válassz létező draft adateverziót.');
   if (!/^[a-f0-9]{64}$/i.test(params.importToken)) return fail('64 karakteres hex importtoken szükséges.');
   if (!params.seasons.length) return fail('Nincs feltöltendő szezon.');
   const combined: IngestResult = { success: true, partial: false, seasons: 0, teams: 0, matches: 0,
@@ -267,9 +272,9 @@ export async function ingestSeasonsToCloud(params: {
   // One complete season per request: never split its stable match numbers.
   // Validate every request size BEFORE the first write.
   const requests = params.seasons.map((s) => ({
-    mode: 'merge', allowPartial: false, teamAliasMap: params.teamAliasMap,
+    mode: 'merge', allowPartial: false, dataVersionId: env.dataVersionId, teamAliasMap: params.teamAliasMap,
     seasons: [{ league: s.league, seasonIndex: s.seasonIndex, name: s.name,
-      fileName: s.fileName || null, contentHash: s.contentHash,
+      fileName: s.fileName || 'winmix-upload.json', contentHash: s.contentHash,
       orderMode: s.orderMode === 'chronological' ? 'chronological' : 'source-order',
       matches: s.matches.map((m) => ({ home_team: m.home_team, away_team: m.away_team,
         home_score: m.home_score, away_score: m.away_score, ht_home_score: m.ht_home_score,
@@ -277,9 +282,9 @@ export async function ingestSeasonsToCloud(params: {
         rowIndex: typeof m.rowIndex === 'number' ? m.rowIndex : null, sourceFileId: m.sourceFileId ?? null })) }]
   }));
   const bodies = requests.map((r) => JSON.stringify(r));
-  const oversized = requests.findIndex((r, i) => r.seasons[0].matches.length > 2000 ||
+  const oversized = requests.findIndex((r, i) => r.seasons[0].matches.length > 240 ||
     new TextEncoder().encode(bodies[i]).length > 4 * 1024 * 1024);
-  if (oversized >= 0) return fail(`A(z) ${params.seasons[oversized].name} szezon meghaladja a 2000 mérkőzés / 4 MiB korlátot.`);
+  if (oversized >= 0) return fail(`A(z) ${params.seasons[oversized].name} szezon meghaladja a 240 mérkőzés / 4 MiB korlátot.`);
   for (let i = 0; i < bodies.length; i++) {
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 60000);
