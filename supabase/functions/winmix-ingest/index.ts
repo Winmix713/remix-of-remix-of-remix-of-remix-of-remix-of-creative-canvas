@@ -1,6 +1,24 @@
 // WinMix season ingest — auto-creates teams, no admin token required.
-// Uses the Supabase-injected SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY.
+// Hosted edge functions inject SUPABASE_SECRET_KEYS (JSON map) and SUPABASE_URL.
 import { createClient } from "npm:@supabase/supabase-js@2.95.0";
+import { corsHeaders } from "npm:@supabase/supabase-js@2.95.0/cors";
+
+/** Resolve the service-role key from any of the injected env formats. */
+function getServiceRoleKey(): string {
+  // Hosted: SUPABASE_SECRET_KEYS is a JSON map like {"service_role": "sb_secret_..."} or {"secret_key": ...}
+  const raw = Deno.env.get("SUPABASE_SECRET_KEYS");
+  if (raw) {
+    try {
+      const map = JSON.parse(raw) as Record<string, string>;
+      const key = map["service_role"] ?? map["secret_key"] ?? map["SECRET_KEY"];
+      if (typeof key === "string" && key) return key;
+    } catch { /* fall through */ }
+  }
+  // Fallback for local / older config
+  const direct = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SECRET_KEY");
+  if (typeof direct === "string" && direct) return direct;
+  throw new Error("Service role key not found in SUPABASE_SECRET_KEYS or SUPABASE_SERVICE_ROLE_KEY");
+}
 
 const LIMITS = { bytes: 4 * 1024 * 1024, seasons: 5, matches: 2000, errors: 100 };
 const MAX_GOALS = 20;
@@ -146,18 +164,12 @@ async function readJson(req: Request): Promise<unknown> {
   catch { throw new HttpError(400, "Érvénytelen JSON vagy UTF-8"); }
 }
 
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "content-type, authorization, x-client-info, apikey, x-retry-count, traceparent, tracestate, baggage",
-  "Access-Control-Expose-Headers": "X-Request-Id",
-  "Access-Control-Max-Age": "600",
-};
-
 Deno.serve(async (req: Request) => {
   const requestId = crypto.randomUUID();
   const headers = new Headers({
-    ...cors,
+    ...corsHeaders,
+    "Access-Control-Expose-Headers": "X-Request-Id",
+    "Access-Control-Max-Age": "600",
     "Vary": "Origin",
     "Cache-Control": "no-store",
     "X-Request-Id": requestId,
@@ -166,11 +178,12 @@ Deno.serve(async (req: Request) => {
     const h = new Headers(headers); h.set("Content-Type", "application/json; charset=utf-8");
     return new Response(JSON.stringify({ requestId, ...(object(body) ? body : { data: body }) }), { status, headers: h });
   };
-  if (req.method === "OPTIONS") return new Response(null, { status: 200, headers });
+  if (req.method === "OPTIONS") return Response.json({ ok: true }, { headers });
   if (req.method !== "POST") { headers.set("Allow", "POST, OPTIONS"); return json({ success: false, error: "Csak POST támogatott" }, 405); }
   try {
-    const url = Deno.env.get("SUPABASE_URL"), key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!url || !key) throw new HttpError(500, "Hiányzó szerverbeállítás (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)");
+    const url = Deno.env.get("SUPABASE_URL");
+    if (!url) throw new HttpError(500, "Hiányzó SUPABASE_URL");
+    const key = getServiceRoleKey();
     const input = parsePayload(await readJson(req));
     const admin = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
     const stats = { seasons: 0, matches: 0, rejected: 0, repaired: 0, errors: [] as string[], rowErrors: [] as RowError[] };
