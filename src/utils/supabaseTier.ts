@@ -150,7 +150,7 @@ export async function probeCloudTier(): Promise<CloudTierHealth> {
       await restGet(`view_team_ratings_v3?data_version_id=eq.${encodeURIComponent(env.dataVersionId)}&select=canonical_key&limit=1`);
     } catch (e) {
       if (e instanceof CloudHttpError && e.status === 404) {
-        await restGet('');
+        await restGet('winmix_data_versions?select=id&limit=1');
       } else {
         throw e;
       }
