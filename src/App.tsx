@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { Toaster, toast } from 'sonner';
 import { fetchRemoteSeasonFiles } from './utils/remoteSeasons';
+import { AppErrorBoundary } from './components/winmix/AppErrorBoundary';
 import { CloudTierProvider } from './contexts/CloudTierContext';
 import { DialogProvider } from './contexts/DialogContext';
 import { WinmixProvider, useWinmix } from './contexts/WinmixContext';
@@ -136,11 +137,13 @@ function StudioShell() {
 export function App() {
   return (
     <DialogProvider>
-      <WinmixProvider>
-        <CloudTierProvider>
-          <StudioShell />
-        </CloudTierProvider>
-      </WinmixProvider>
+      <AppErrorBoundary>
+        <WinmixProvider>
+          <CloudTierProvider>
+            <StudioShell />
+          </CloudTierProvider>
+        </WinmixProvider>
+      </AppErrorBoundary>
       <Toaster
         theme="dark"
         position="bottom-right"
