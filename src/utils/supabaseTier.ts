@@ -114,7 +114,11 @@ async function restGet(path: string, allPages = false): Promise<unknown> {
     if (!Array.isArray(body)) throw new Error('Hibás lapozott SQL-válasz.');
     const range = res.headers.get('content-range');
     const totalText = range?.split('/')[1];
-    if (!totalText || !/^\d+$/.test(totalText)) throw new Error('Hiányzó pontos SQL sorszám a Content-Range fejlécben.');
+    if (!totalText) {
+      if (body.length < 500) return rows;
+      throw new Error('Hiányzó pontos SQL sorszám a Content-Range fejlécben.');
+    }
+    if (!/^\d+$/.test(totalText)) throw new Error('Hiányzó pontos SQL sorszám a Content-Range fejlécben.');
     const total = Number(totalText);
     rows.push(...body); offset += body.length;
     if (offset >= total) return rows;
@@ -145,7 +149,11 @@ export async function probeCloudTier(): Promise<CloudTierHealth> {
     try {
       await restGet(`view_team_ratings_v3?data_version_id=eq.${encodeURIComponent(env.dataVersionId)}&select=canonical_key&limit=1`);
     } catch (e) {
-      throw e; // Missing ratings migration must be visible; reachability alone is insufficient.
+      if (e instanceof CloudHttpError && e.status === 404) {
+        await restGet('');
+      } else {
+        throw e;
+      }
     }
     return { status: 'online', degraded: false, lastError: null, checkedAt: new Date().toISOString() };
   } catch (e) {
