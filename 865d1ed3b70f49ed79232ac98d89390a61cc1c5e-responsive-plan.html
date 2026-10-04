@@ -1,0 +1,1487 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="WinMix Studio - Football Intelligence Platform mérkőzésadatokra építve.">
+  <title>WinMix Studio | Match Intelligence Platform</title>
+
+  <!-- TYPOGRAPHY -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- SCRIPTS & ICONS -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+  <style>
+    /* ==========================================================================
+       RESPONSIVE DESIGN TOKENS (Implement is plan! - Fluid Scale & Tokens)
+       ========================================================================== */
+    :root {
+      --bg: #050709;
+      --bg-surface: rgba(10, 14, 18, 0.72);
+      --bg-card: rgba(14, 19, 25, 0.65);
+      --bg-card-hover: rgba(19, 26, 35, 0.85);
+
+      --line: rgba(255, 255, 255, 0.08);
+      --line-strong: rgba(255, 255, 255, 0.14);
+
+      --text: #f7f9fa;
+      --text-soft: #a8b3be;
+      --text-muted: #6e7c8a;
+
+      --lime: #c5ff4a;
+      --lime-glow: rgba(197, 255, 74, 0.22);
+      --gold: #e2c079;
+      --gold-glow: rgba(226, 192, 121, 0.18);
+      --danger: #ff5c5c;
+
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --radius-xl: 26px;
+
+      --header-height: clamp(60px, 4.5rem, 68px);
+      --container: 1360px;
+      --ease: cubic-bezier(0.16, 1, 0.3, 1);
+
+      /* Fluid Typography (clamp min, preferred + vw, max) */
+      --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.8125rem);
+      --text-sm: clamp(0.8125rem, 0.76rem + 0.35vw, 0.875rem);
+      --text-base: clamp(0.9375rem, 0.88rem + 0.45vw, 1.0625rem);
+      --text-lg: clamp(1.125rem, 1rem + 0.625vw, 1.25rem);
+      --text-xl: clamp(1.25rem, 1.05rem + 1vw, 1.5rem);
+      --text-hero: clamp(2.35rem, 1.5rem + 4.2vw, 4.25rem);
+
+      /* Fluid Spacing Scale */
+      --space-xs: clamp(0.25rem, 0.2rem + 0.25vw, 0.5rem);
+      --space-sm: clamp(0.5rem, 0.4rem + 0.5vw, 0.75rem);
+      --space-md: clamp(1rem, 0.8rem + 1vw, 1.5rem);
+      --space-lg: clamp(1.5rem, 1.2rem + 1.5vw, 2.5rem);
+      --space-xl: clamp(2rem, 1.5rem + 2.5vw, 4rem);
+    }
+
+    /* CSS RESET */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      background-color: var(--bg);
+      color: var(--text);
+    }
+
+    body {
+      min-height: 100dvh; /* Mobile browser dynamic viewport support */
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.5;
+    }
+
+    button, input, select {
+      font: inherit;
+      color: inherit;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    /* ==========================================================================
+       STADIUM HERO BACKGROUND (RESPONSIVE VIEWPORT STACK)
+       ========================================================================== */
+    .viewport-bg {
+      position: absolute;
+      inset: 0;
+      height: 100%;
+      min-height: 100dvh;
+      z-index: -2;
+      overflow: hidden;
+      pointer-events: none;
+      background: var(--bg);
+    }
+
+    .stadium-layer {
+      position: absolute;
+      inset: -3%;
+      background-image:
+        radial-gradient(circle 600px at 78% 28%, rgba(197, 255, 74, 0.12) 0%, transparent 75%),
+        linear-gradient(90deg, rgba(5, 7, 9, 0.96) 0%, rgba(5, 7, 9, 0.74) 34%, rgba(5, 7, 9, 0.42) 58%, rgba(5, 7, 9, 0.88) 100%),
+        linear-gradient(180deg, rgba(5, 7, 9, 0.88) 0%, rgba(5, 7, 9, 0.22) 28%, rgba(5, 7, 9, 0.25) 55%, rgba(5, 7, 9, 0.94) 88%, var(--bg) 100%),
+        radial-gradient(circle at 45% 40%, transparent 42%, rgba(5, 7, 9, 0.85) 100%),
+        url("./stadium-hero-2560x1080.jpg");
+      background-repeat: no-repeat;
+      background-size: cover;
+      background-position: center 36%;
+      filter: saturate(0.92) contrast(1.08) brightness(0.72);
+      transform: scale(1.02);
+      animation: cameraDrift 28s var(--ease) infinite alternate;
+      will-change: transform;
+    }
+
+    @keyframes cameraDrift {
+      0% { transform: scale(1.02) translate3d(0, 0, 0); }
+      100% { transform: scale(1.045) translate3d(-1%, -0.6%, 0); }
+    }
+
+    .noise-texture {
+      position: absolute;
+      inset: 0;
+      opacity: 0.025;
+      background-image: radial-gradient(#fff 0.7px, transparent 0.7px);
+      background-size: 4px 4px;
+      mix-blend-mode: overlay;
+      pointer-events: none;
+    }
+
+    /* ==========================================================================
+       HEADER & MOBILE-FIRST NAVIGATION
+       ========================================================================== */
+    .header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: var(--header-height);
+      z-index: 100;
+      background: rgba(5, 7, 9, 0.78);
+      backdrop-filter: blur(20px) saturate(140%);
+      -webkit-backdrop-filter: blur(20px) saturate(140%);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .header-inner {
+      width: min(var(--container), calc(100% - var(--space-md) * 2));
+      height: 100%;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      user-select: none;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      min-width: 38px;
+      background: var(--lime);
+      color: #06080a;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      box-shadow: 0 0 20px rgba(197, 255, 74, 0.35);
+      transition: transform 0.2s var(--ease);
+    }
+
+    .brand-text h1 {
+      font-size: clamp(14px, 1.2vw, 16px);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    .brand-tag {
+      font-family: 'DM Mono', monospace;
+      font-size: 8.5px;
+      font-weight: 500;
+      color: var(--text-muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    /* Navigation Pattern: Mobile Toggle + Desktop Horizontal */
+    .nav-links {
+      display: none;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .nav-item {
+      padding: 8px 14px;
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--text-soft);
+      border-radius: var(--radius-sm);
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .nav-item:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .nav-item.active {
+      color: var(--text);
+    }
+
+    .nav-item.active::after {
+      content: "";
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      bottom: 0px;
+      height: 2px;
+      background: var(--lime);
+      border-radius: 2px;
+      box-shadow: 0 0 10px var(--lime);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .header-btn {
+      min-height: 44px; /* Touch target minimum 44px */
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 14px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      color: var(--text-soft);
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .header-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      border-color: var(--line-strong);
+    }
+
+    .header-btn.accent {
+      background: var(--lime);
+      border-color: transparent;
+      color: #06090a;
+      box-shadow: 0 4px 18px rgba(197, 255, 74, 0.28);
+    }
+
+    .header-btn.accent:hover {
+      background: #d6ff6b;
+      transform: translateY(-1px);
+    }
+
+    .header-btn.icon-only {
+      padding: 0;
+      width: 44px;
+      justify-content: center;
+    }
+
+    .mobile-menu-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      min-height: 44px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    /* Mobile Navigation Drawer */
+    .mobile-nav-panel {
+      position: fixed;
+      top: var(--header-height);
+      left: var(--space-sm);
+      right: var(--space-sm);
+      background: rgba(9, 12, 16, 0.95);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-lg);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      opacity: 0;
+      transform: translateY(-10px);
+      pointer-events: none;
+      transition: opacity 0.25s var(--ease), transform 0.25s var(--ease);
+      z-index: 99;
+    }
+
+    .mobile-nav-panel.open {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .mobile-nav-link {
+      padding: 12px 16px;
+      font-size: var(--text-base);
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      color: var(--text-soft);
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+    }
+
+    .mobile-nav-link:hover, .mobile-nav-link.active {
+      color: var(--lime);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    /* ==========================================================================
+       HERO STAGE: CONTAINER QUERIES & INTRINSIC CSS GRID
+       ========================================================================== */
+    .hero {
+      position: relative;
+      min-height: calc(100dvh - var(--header-height));
+      display: flex;
+      align-items: center;
+      padding-top: calc(var(--header-height) + var(--space-lg));
+      padding-bottom: var(--space-xl);
+    }
+
+    .hero-container {
+      width: min(var(--container), calc(100% - var(--space-md) * 2));
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr;
+      align-items: center;
+      gap: var(--space-xl);
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      font-family: 'DM Mono', monospace;
+      font-size: var(--text-xs);
+      font-weight: 500;
+      color: var(--lime);
+      background: rgba(197, 255, 74, 0.08);
+      border: 1px solid rgba(197, 255, 74, 0.2);
+      border-radius: 9999px;
+      margin-bottom: var(--space-md);
+    }
+
+    .hero-badge-pulse {
+      width: 6px;
+      height: 6px;
+      background: var(--lime);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--lime);
+      animation: pulse 2s infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .hero-headline {
+      font-size: var(--text-hero);
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+      margin-bottom: var(--space-md);
+      text-shadow: 0 4px 25px rgba(0, 0, 0, 0.7);
+    }
+
+    .headline-dim {
+      color: rgba(247, 249, 250, 0.58);
+      font-weight: 700;
+    }
+
+    .headline-glow {
+      position: relative;
+      color: var(--text);
+      display: inline-block;
+    }
+
+    .headline-glow::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      bottom: -4px;
+      width: 100%;
+      height: 3px;
+      background: linear-gradient(90deg, var(--lime), transparent);
+      border-radius: 2px;
+    }
+
+    .hero-desc {
+      font-size: var(--text-base);
+      color: var(--text-soft);
+      line-height: 1.7;
+      max-width: 530px;
+      margin-bottom: var(--space-lg);
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+    }
+
+    .hero-desc strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .cta-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: var(--space-lg);
+    }
+
+    .btn {
+      min-height: 48px; /* Touch target minimum */
+      padding: 0 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-size: var(--text-sm);
+      font-weight: 700;
+      border-radius: 12px;
+      transition: all 0.22s var(--ease);
+      cursor: pointer;
+      width: 100%;
+    }
+
+    .btn-main {
+      background: var(--lime);
+      color: #06090a;
+      border: none;
+      box-shadow: 0 10px 30px rgba(197, 255, 74, 0.28);
+    }
+
+    .btn-main:hover {
+      background: #d6ff6b;
+      transform: translateY(-2px);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--line-strong);
+      color: var(--text);
+      backdrop-filter: blur(12px);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.09);
+      border-color: rgba(255, 255, 255, 0.25);
+      transform: translateY(-2px);
+    }
+
+    .trust-badges {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 14px;
+      font-family: 'DM Mono', monospace;
+      font-size: var(--text-xs);
+      color: var(--text-muted);
+    }
+
+    .trust-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .trust-item svg {
+      color: var(--lime);
+    }
+
+    /* ==========================================================================
+       CONTAINER QUERY ENABLED MATCHDAY INTELLIGENCE CARD (Pattern 1)
+       ========================================================================== */
+    .card-wrap {
+      position: relative;
+      display: flex;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .card-glow-aura {
+      position: absolute;
+      width: min(500px, 100vw);
+      height: 450px;
+      top: 50%;
+      right: 50%;
+      transform: translate(50%, -50%);
+      background: radial-gradient(circle, var(--gold-glow) 0%, rgba(197, 255, 74, 0.08) 35%, transparent 70%);
+      filter: blur(45px);
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    /* Container Query Context */
+    #quantum-card-container {
+      container-type: inline-size;
+      container-name: qcard;
+      width: 100%;
+      max-width: 440px;
+      perspective: 1200px;
+    }
+
+    #nebula-tilt {
+      width: 100%;
+      aspect-ratio: 1 / 1.45;
+      position: relative;
+      transform-style: preserve-3d;
+      will-change: transform;
+    }
+
+    #nebula-wrapper {
+      position: absolute;
+      inset: 0;
+      padding: 1px;
+      border-radius: var(--radius-xl);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(120, 120, 120, 0.15) 50%, rgba(197, 255, 74, 0.25) 100%);
+      box-shadow: 0 35px 90px -15px rgba(0, 0, 0, 0.9);
+      opacity: 0;
+      transform: translateY(20px) scale(0.96);
+      transition: box-shadow 0.5s ease;
+    }
+
+    .card-inner-box {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      border-radius: calc(var(--radius-xl) - 1px);
+      overflow: hidden;
+      background: #07090c;
+    }
+
+    #nebula-gl {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      z-index: 1;
+      opacity: 0.85;
+    }
+
+    .card-player-frame {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      overflow: hidden;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    .card-player-img {
+      height: 105%;
+      width: auto;
+      max-width: none;
+      object-fit: cover;
+      object-position: top center;
+      opacity: 0.86;
+      filter: contrast(1.22) saturate(0.92) brightness(0.94);
+      transform: translateY(12px);
+      filter: drop-shadow(0 20px 35px rgba(0, 0, 0, 0.95));
+    }
+
+    .card-mask-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      background: linear-gradient(to top, #050709 0%, rgba(5, 7, 9, 0.5) 45%, rgba(5, 7, 9, 0.72) 100%);
+      pointer-events: none;
+    }
+
+    .card-radial-mask {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      background: radial-gradient(circle at center, transparent 35%, rgba(5, 7, 9, 0.85) 100%);
+      pointer-events: none;
+    }
+
+    .card-hud-content {
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+      padding: clamp(14px, 4cqi, 24px);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      color: #fff;
+      pointer-events: none;
+    }
+
+    .hud-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .hud-kicker {
+      display: block;
+      font-family: 'DM Mono', monospace;
+      font-size: clamp(8px, 2.4cqi, 9.5px);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .hud-title {
+      font-size: clamp(14px, 4cqi, 17px);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-top: 2px;
+    }
+
+    .hud-ready-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: rgba(197, 255, 74, 0.1);
+      border: 1px solid rgba(197, 255, 74, 0.25);
+      color: var(--lime);
+      font-family: 'DM Mono', monospace;
+      font-size: clamp(8px, 2.3cqi, 9px);
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      backdrop-filter: blur(8px);
+      white-space: nowrap;
+    }
+
+    .hud-pulse-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--lime);
+      box-shadow: 0 0 8px var(--lime);
+      animation: pulse 2s infinite;
+    }
+
+    .hud-main-signal {
+      margin: auto 0;
+      padding-top: clamp(6px, 2cqi, 14px);
+    }
+
+    .signal-big-value {
+      font-size: clamp(38px, 12cqi, 54px);
+      font-weight: 800;
+      line-height: 0.95;
+      letter-spacing: -0.06em;
+      color: var(--gold);
+      text-shadow: 0 0 35px rgba(226, 192, 121, 0.25);
+    }
+
+    .signal-trend-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-family: 'DM Mono', monospace;
+      font-size: clamp(10px, 3cqi, 12px);
+      font-weight: 600;
+      color: var(--lime);
+      margin-left: 10px;
+    }
+
+    .signal-iteration-sub {
+      font-size: clamp(9.5px, 2.7cqi, 11px);
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .hud-quality-row {
+      margin-top: clamp(8px, 2.5cqi, 14px);
+      padding-top: clamp(6px, 2cqi, 10px);
+      border-top: 1px solid rgba(255, 255, 255, 0.09);
+    }
+
+    .hud-quality-meta {
+      display: flex;
+      justify-content: space-between;
+      font-family: 'DM Mono', monospace;
+      font-size: clamp(8px, 2.3cqi, 9.5px);
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      letter-spacing: 0.06em;
+    }
+
+    .hud-quality-bar-bg {
+      height: 4px;
+      width: 100%;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 9999px;
+      overflow: hidden;
+    }
+
+    .hud-quality-bar-val {
+      height: 100%;
+      width: 84.6%;
+      background: linear-gradient(90deg, rgba(226, 192, 121, 0.4), var(--gold));
+      border-radius: 9999px;
+      box-shadow: 0 0 10px rgba(226, 192, 121, 0.45);
+    }
+
+    .hud-matrix-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      background: rgba(10, 14, 18, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: var(--radius-md);
+      padding: clamp(8px, 2.8cqi, 12px);
+      backdrop-filter: blur(14px);
+      margin-top: clamp(8px, 2.5cqi, 12px);
+    }
+
+    .hud-matrix-cell {
+      padding: 3px 5px;
+    }
+
+    .hud-matrix-cell.border-left {
+      border-left: 1px solid rgba(255, 255, 255, 0.06);
+      padding-left: clamp(6px, 2.5cqi, 12px);
+    }
+
+    .hud-matrix-cell.border-top {
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      padding-top: clamp(4px, 1.8cqi, 8px);
+    }
+
+    .hud-cell-label {
+      font-family: 'DM Mono', monospace;
+      font-size: clamp(7.5px, 2.1cqi, 8.5px);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .hud-cell-val {
+      font-size: clamp(15px, 4.2cqi, 18px);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .hud-cell-val.gold { color: var(--gold); }
+    .hud-cell-val.lime { color: var(--lime); }
+
+    .hud-cell-val span {
+      font-size: clamp(8px, 2cqi, 9.5px);
+      font-weight: 400;
+      color: var(--text-muted);
+      margin-left: 3px;
+    }
+
+    .hud-card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: 'DM Mono', monospace;
+      font-size: clamp(8px, 2.2cqi, 9.5px);
+      color: var(--text-muted);
+      margin-top: clamp(6px, 2cqi, 12px);
+      padding-top: clamp(6px, 2cqi, 10px);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .hud-footer-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-soft);
+    }
+
+    .hud-status-mini-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--lime);
+      box-shadow: 0 0 6px var(--lime);
+    }
+
+    /* ==========================================================================
+       PRODUCT GRID: AUTO-FIT PATTERN (Pattern 3: CSS Grid Responsive)
+       ========================================================================== */
+    .product-section {
+      width: min(var(--container), calc(100% - var(--space-md) * 2));
+      margin: 0 auto;
+      padding-bottom: var(--space-xl);
+    }
+
+    .tiles-grid {
+      display: grid;
+      /* Auto-fit grid from Implement is plan! - items wrap automatically without fixed columns */
+      grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+      gap: var(--space-md);
+    }
+
+    .tile {
+      background: var(--bg-surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      padding: var(--space-lg);
+      backdrop-filter: blur(16px);
+      transition: all 0.28s var(--ease);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .tile::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .tile:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--line-strong);
+      transform: translateY(-4px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+    }
+
+    .tile:hover::before {
+      opacity: 1;
+    }
+
+    .tile-icon {
+      width: 42px;
+      height: 42px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      color: var(--lime);
+      margin-bottom: var(--space-md);
+      transition: transform 0.2s ease;
+    }
+
+    .tile:hover .tile-icon {
+      transform: scale(1.08);
+      background: rgba(197, 255, 74, 0.1);
+      border-color: rgba(197, 255, 74, 0.25);
+    }
+
+    .tile h4 {
+      font-size: var(--text-base);
+      font-weight: 700;
+      margin-bottom: 8px;
+      letter-spacing: -0.01em;
+    }
+
+    .tile p {
+      font-size: var(--text-sm);
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* ==========================================================================
+       FOOTER
+       ========================================================================== */
+    .site-footer {
+      border-top: 1px solid var(--line);
+      padding: var(--space-lg) 0;
+    }
+
+    .footer-inner {
+      width: min(var(--container), calc(100% - var(--space-md) * 2));
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      align-items: center;
+      text-align: center;
+      font-family: 'DM Mono', monospace;
+      font-size: var(--text-xs);
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 18px;
+    }
+
+    .footer-links a:hover {
+      color: var(--text);
+    }
+
+    /* ==========================================================================
+       TOAST
+       ========================================================================== */
+    .toast-box {
+      position: fixed;
+      left: 50%;
+      bottom: var(--space-md);
+      transform: translateX(-50%) translateY(20px);
+      opacity: 0;
+      background: rgba(15, 20, 26, 0.94);
+      border: 1px solid var(--line-strong);
+      padding: 12px 20px;
+      border-radius: 9999px;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--text);
+      z-index: 999;
+      pointer-events: none;
+      transition: all 0.3s var(--ease);
+      width: max-content;
+      max-width: calc(100% - 32px);
+    }
+
+    .toast-box.active {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    .toast-box svg {
+      color: var(--lime);
+    }
+
+    /* ==========================================================================
+       MOBILE-FIRST BREAKPOINTS (Quick Reference Strategy)
+       ========================================================================== */
+    /* sm: Landscape phones & small tablets (>= 640px) */
+    @media (min-width: 640px) {
+      .cta-group {
+        flex-direction: row;
+      }
+      .btn {
+        width: auto;
+      }
+      .footer-inner {
+        flex-direction: row;
+        justify-content: space-between;
+        text-align: left;
+      }
+    }
+
+    /* md: Tablets (>= 768px) */
+    @media (min-width: 768px) {
+      .card-glow-aura {
+        right: -30px;
+        transform: translateY(-50%);
+      }
+    }
+
+    /* lg: Laptops & Desktops (>= 1024px) */
+    @media (min-width: 1024px) {
+      .nav-links {
+        display: flex;
+      }
+      .mobile-menu-btn {
+        display: none;
+      }
+      .hero-container {
+        grid-template-columns: 1.08fr 0.92fr;
+        gap: 50px;
+      }
+      .card-wrap {
+        justify-content: flex-end;
+      }
+    }
+
+    /* REDUCED MOTION (Accessibility) */
+    @media (prefers-reduced-motion: reduce) {
+      .stadium-layer {
+        animation: none;
+        transform: scale(1.02);
+      }
+      #nebula-tilt {
+        transform: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ATMOSPHERIC BACKGROUND SYSTEM -->
+  <div class="viewport-bg" aria-hidden="true">
+    <div class="stadium-layer"></div>
+    <div class="noise-texture"></div>
+  </div>
+
+  <!-- NAVIGATION HEADER -->
+  <header class="header">
+    <div class="header-inner">
+      <a href="#" class="brand" aria-label="WinMix Studio kezdőlap">
+        <div class="brand-mark">
+          <i data-lucide="sparkles" style="width: 20px; height: 20px;"></i>
+        </div>
+        <div class="brand-text">
+          <h1>WinMix Studio</h1>
+          <div class="brand-tag">Match Intelligence</div>
+        </div>
+      </a>
+
+      <!-- Desktop Nav -->
+      <nav class="nav-links" aria-label="Fő navigáció">
+        <a href="#intelligence" class="nav-item active">Intelligence</a>
+        <a href="#pipeline" class="nav-item">Pipeline</a>
+        <a href="#models" class="nav-item">Models</a>
+        <a href="#system" class="nav-item">System</a>
+      </nav>
+
+      <div class="header-actions">
+        <button class="header-btn" type="button" id="langSelector">
+          <span>GB Angol</span>
+          <i data-lucide="chevron-down" style="width: 14px; height: 14px;"></i>
+        </button>
+        <button class="header-btn" type="button" id="loadDataBtn">
+          <i data-lucide="download" style="width: 14px; height: 14px;"></i>
+          <span>Betöltés</span>
+        </button>
+        <button class="header-btn accent" type="button" id="runPipelineHeader">
+          <i data-lucide="play" style="width: 14px; height: 14px; fill: currentColor;"></i>
+          <span>Pipeline futtatás</span>
+        </button>
+        <button class="header-btn icon-only" type="button" id="clearBtn" aria-label="Aktív futtatás törlése">
+          <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+        </button>
+
+        <!-- Mobile Drawer Toggle Button (44x44px Touch Target) -->
+        <button class="mobile-menu-btn" type="button" id="mobileMenuToggle" aria-label="Menü megnyitása" aria-expanded="false" aria-controls="mobilePanel">
+          <i data-lucide="menu" id="menuIcon" style="width: 20px; height: 20px;"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MOBILE SLIDE DRAWER (Adaptive Navigation Pattern) -->
+  <div class="mobile-nav-panel" id="mobilePanel">
+    <a href="#intelligence" class="mobile-nav-link active">Intelligence</a>
+    <a href="#pipeline" class="mobile-nav-link">Pipeline</a>
+    <a href="#models" class="mobile-nav-link">Models</a>
+    <a href="#system" class="mobile-nav-link">System</a>
+  </div>
+
+  <main>
+    <!-- HERO SECTION -->
+    <section class="hero" id="intelligence">
+      <div class="hero-container">
+        
+        <!-- BAL OSZLOP: TIPOGRÁFIA & CTA -->
+        <div class="hero-content">
+          <div class="hero-badge">
+            <span class="hero-badge-pulse"></span>
+            LIVE MATCH INTELLIGENCE
+          </div>
+
+          <h2 class="hero-headline">
+            A játék ott kezdődik,<br>
+            <span class="headline-dim">ahol az adat</span><br>
+            <span class="headline-glow">véget ér.</span>
+          </h2>
+
+          <p class="hero-desc">
+            <strong>Football intelligence platform</strong> valós idejű mérkőzésadatokra építve. Strukturált folyamatból prediktív jeleket, modellekből pedig azonnali döntéstámogatást nyújtunk.
+          </p>
+
+          <div class="cta-group">
+            <button class="btn btn-main" type="button" id="heroStartBtn">
+              <i data-lucide="play" style="width: 16px; height: 16px; fill: currentColor;"></i>
+              <span>Elemzés indítása</span>
+            </button>
+            <a href="#models" class="btn btn-secondary">
+              <span>Rendszer áttekintése</span>
+              <i data-lucide="arrow-up-right" style="width: 16px; height: 16px;"></i>
+            </a>
+          </div>
+
+          <div class="trust-badges">
+            <div class="trust-item">
+              <i data-lucide="check" style="width: 14px; height: 14px;"></i>
+              <span>GB Angol</span>
+            </div>
+            <span>•</span>
+            <div class="trust-item">
+              <span>Model driven analysis</span>
+            </div>
+            <span>•</span>
+            <div class="trust-item">
+              <span>Real-time pipeline</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- JOBB OSZLOP: HOLOGRAPHIC QUANTUM MATCHDAY INTELLIGENCE CARD -->
+        <div class="card-wrap" id="pipeline">
+          <div class="card-glow-aura"></div>
+          
+          <div id="quantum-card-container">
+            <div id="nebula-tilt">
+              <div id="nebula-wrapper">
+                <div class="card-inner-box">
+
+                  <!-- 1. WebGL Holografikus Shader Felület -->
+                  <canvas id="nebula-gl"></canvas>
+
+                  <!-- 2. Futballista Karakter Kép -->
+                  <div class="card-player-frame">
+                    <img 
+                      src="footballer-DsLEtt2H.jpg" 
+                      alt="Harry Kane - Match Intelligence" 
+                      class="card-player-img"
+                      loading="eager"
+                    >
+                  </div>
+
+                  <!-- 3. Sötétítő Kontraszt & Vignette -->
+                  <div class="card-mask-overlay"></div>
+                  <div class="card-radial-mask"></div>
+
+                  <!-- 4. Telemetria HUD / Adatréteg (Container Query egységekkel skálázva) -->
+                  <div class="card-hud-content">
+                    
+                    <!-- Fejléc -->
+                    <div class="hud-header neb-elem">
+                      <div>
+                        <span class="hud-kicker">Aktuális Jel / Signal</span>
+                        <h3 class="hud-title">Matchday Intelligence</h3>
+                      </div>
+                      <div class="hud-ready-badge">
+                        <span class="hud-pulse-dot"></span>
+                        READY
+                      </div>
+                    </div>
+
+                    <!-- Fő Jelerősség Érték -->
+                    <div class="hud-main-signal neb-elem">
+                      <span class="hud-kicker">Jelerősség / Signal Strength</span>
+                      <div style="display: flex; align-items: baseline;">
+                        <span class="signal-big-value">84.6%</span>
+                        <span class="signal-trend-pill">
+                          <iconify-icon icon="solar:trending-up-bold"></iconify-icon>
+                          +3.2%
+                        </span>
+                      </div>
+                      <div class="signal-iteration-sub">vs. korábbi modell-iteráció</div>
+
+                      <!-- Minőségi skála -->
+                      <div class="hud-quality-row">
+                        <div class="hud-quality-meta">
+                          <span>SIGNAL QUALITY</span>
+                          <span style="color: var(--gold); font-weight: bold;">84.6</span>
+                        </div>
+                        <div class="hud-quality-bar-bg">
+                          <div class="hud-quality-bar-val"></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 2x2 Telemetria Mátrix -->
+                    <div class="neb-elem">
+                      <div class="hud-matrix-grid">
+                        <div class="hud-matrix-cell">
+                          <span class="hud-cell-label">Modell Pontosság</span>
+                          <div class="hud-cell-val gold">84.6%</div>
+                        </div>
+                        <div class="hud-matrix-cell border-left">
+                          <span class="hud-cell-label">Feldolgozott Meccsek</span>
+                          <div class="hud-cell-val">128<span>ready</span></div>
+                        </div>
+                        <div class="hud-matrix-cell border-top">
+                          <span class="hud-cell-label">Adatminőség</span>
+                          <div class="hud-cell-val lime">98.2%</div>
+                        </div>
+                        <div class="hud-matrix-cell border-top border-left">
+                          <span class="hud-cell-label">Késleltetés</span>
+                          <div class="hud-cell-val">42<span>ms</span></div>
+                        </div>
+                      </div>
+
+                      <!-- Kártya Lábléc -->
+                      <div class="hud-card-footer">
+                        <div class="hud-footer-status">
+                          <span class="hud-status-mini-dot"></span>
+                          <span>Pipeline készen áll</span>
+                        </div>
+                        <span>Frissítve: 14:32:08</span>
+                      </div>
+                    </div>
+
+                  </div>
+
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- LOWER TILES: TERMÉK MODULOK (CSS Grid Auto-Fit Pattern) -->
+    <section class="product-section" id="models">
+      <div class="tiles-grid">
+        <article class="tile">
+          <div class="tile-icon">
+            <i data-lucide="database" style="width: 18px; height: 18px;"></i>
+          </div>
+          <h4>Strukturált Meccsadatok</h4>
+          <p>Több forrásból validált, valós idejű telemetria és statisztikai adatfolyam a megbízható alapokhoz.</p>
+        </article>
+
+        <article class="tile">
+          <div class="tile-icon">
+            <i data-lucide="brain-circuit" style="width: 18px; height: 18px;"></i>
+          </div>
+          <h4>Prediktív Modellek</h4>
+          <p>Dinamikusan súlyozott algoritmusok a mintázatok, taktikai trendek és kockázatok gyors feltárására.</p>
+        </article>
+
+        <article class="tile" id="system">
+          <div class="tile-icon">
+            <i data-lucide="activity" style="width: 18px; height: 18px;"></i>
+          </div>
+          <h4>Valós Idejű Pipeline</h4>
+          <p>42 ms alatti válaszidővel és folyamatos állapotkövetéssel működő stream feldolgozó infrastruktúra.</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div>WinMix Studio • Match Intelligence System</div>
+      <div class="footer-links">
+        <a href="#">Adatvédelem</a>
+        <a href="#">Rendszerállapot</a>
+        <a href="#">v2.8.4-prod</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- NOTIFICATION TOAST -->
+  <div class="toast-box" id="toast">
+    <i data-lucide="check-circle-2" style="width: 16px; height: 16px;"></i>
+    <span id="toastMsg">Pipeline elindítva...</span>
+  </div>
+
+  <!-- SCRIPT LOGIKA -->
+  <script>
+    // Lucide ikonok inicializálása
+    lucide.createIcons();
+
+    // ==========================================================================
+    // MOBILE NAV DRAWER (Pattern 4: Responsive Navigation)
+    // ==========================================================================
+    const menuToggle = document.getElementById('mobileMenuToggle');
+    const mobilePanel = document.getElementById('mobilePanel');
+    const menuIcon = document.getElementById('menuIcon');
+
+    menuToggle.addEventListener('click', () => {
+      const isOpen = mobilePanel.classList.toggle('open');
+      menuToggle.setAttribute('aria-expanded', isOpen);
+      menuToggle.innerHTML = isOpen 
+        ? `<i data-lucide="x" style="width: 20px; height: 20px;"></i>` 
+        : `<i data-lucide="menu" style="width: 20px; height: 20px;"></i>`;
+      lucide.createIcons();
+    });
+
+    mobilePanel.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', () => {
+        mobilePanel.classList.remove('open');
+        menuToggle.setAttribute('aria-expanded', false);
+        menuToggle.innerHTML = `<i data-lucide="menu" style="width: 20px; height: 20px;"></i>`;
+        lucide.createIcons();
+      });
+    });
+
+    // ==========================================================================
+    // GSAP MEGJELENÉS ÉS WEBGL SHADER LOGIKA
+    // ==========================================================================
+    (function initQuantumCard() {
+      const wrapper = document.getElementById('nebula-wrapper');
+      const tilt = document.getElementById('nebula-tilt');
+      const canvas = document.getElementById('nebula-gl');
+      if (!canvas) return;
+
+      const gl = canvas.getContext('webgl');
+
+      // GSAP beúszás
+      gsap.to(wrapper, { opacity: 1, y: 0, scale: 1, duration: 1.5, ease: 'expo.out', delay: 0.1 });
+      gsap.fromTo('.neb-elem', { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.9, stagger: 0.12, delay: 0.4 });
+
+      if (!gl) return;
+
+      const VS = 'attribute vec2 p; void main(){ gl_Position=vec4(p,0.,1.); }';
+      const FS = `
+        precision highp float;
+        uniform vec2 u_res; uniform float u_time; uniform vec2 u_ptr; uniform float u_hov;
+        float hash(vec2 p){ p=fract(p*vec2(127.1,311.7)); return fract(p.x*p.y); }
+        float noise(vec2 p){
+          vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.0-2.0*f);
+          return mix(mix(hash(i),hash(i+vec2(1,0)),u.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),u.x),u.y);
+        }
+        vec3 pal(float t){ return vec3(0.5)+0.5*cos(6.283*(t+vec3(0,0.1,0.2))); }
+        void main(){
+          vec2 uv = gl_FragCoord.xy/u_res; vec2 p = uv-0.5; p.x *= u_res.x/u_res.y;
+          float n = noise(uv*2.6 + u_time*0.04);
+          float ang = uv.x*1.2 - uv.y*1.0 + (u_ptr.x-0.5)*1.8 + n*0.4;
+          vec3 irid = pal(ang*0.5 + n*0.2);
+          float sweep = exp(-10.0 * abs(dot(p,normalize(vec2(0.7))) - (u_ptr.x-0.5)*1.5));
+          float foil = (pow(0.5+0.5*sin(ang*10.0), 2.0)*0.3 + sweep*0.6) * (0.5+0.5*u_hov);
+          vec3 col = mix(vec3(0.04), irid, foil) + sweep*0.12*u_hov;
+          gl_FragColor = vec4(col, 1.0);
+        }`;
+
+      const createShader = (t, s) => { 
+        const sh = gl.createShader(t); 
+        gl.shaderSource(sh, s); 
+        gl.compileShader(sh); 
+        return sh; 
+      };
+
+      const pr = gl.createProgram();
+      gl.attachShader(pr, createShader(gl.VERTEX_SHADER, VS));
+      gl.attachShader(pr, createShader(gl.FRAGMENT_SHADER, FS));
+      gl.linkProgram(pr); 
+      gl.useProgram(pr);
+
+      const buf = gl.createBuffer(); 
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,3,-1,-1,3]), gl.STATIC_DRAW);
+      const loc = gl.getAttribLocation(pr, 'p'); 
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+      const uRes = gl.getUniformLocation(pr, 'u_res');
+      const uTime = gl.getUniformLocation(pr, 'u_time');
+      const uPtr = gl.getUniformLocation(pr, 'u_ptr');
+      const uHov = gl.getUniformLocation(pr, 'u_hov');
+
+      const fit = () => { 
+        const d = Math.min(window.devicePixelRatio, 2); 
+        canvas.width = canvas.clientWidth * d; 
+        canvas.height = canvas.clientHeight * d; 
+        gl.viewport(0, 0, canvas.width, canvas.height); 
+      };
+      window.addEventListener('resize', fit); 
+      fit();
+
+      let px = 0.5, py = 0.5, tx = 0.5, ty = 0.5, hov = 0, th = 0, rx = 0, ry = 0;
+      
+      window.addEventListener('pointermove', e => { 
+        tx = e.clientX / window.innerWidth; 
+        ty = e.clientY / window.innerHeight; 
+        th = 1; 
+      });
+      window.addEventListener('pointerleave', () => { th = 0; });
+
+      const loop = (t) => {
+        px += (tx - px) * 0.08; 
+        py += (ty - py) * 0.08; 
+        hov += (th - hov) * 0.05;
+        rx += ((0.5 - py) * 18 - rx) * 0.08; 
+        ry += ((px - 0.5) * 18 - ry) * 0.08;
+        
+        tilt.style.transform = `rotateX(${rx}deg) rotateY(${ry}deg)`;
+        gl.uniform2f(uRes, canvas.width, canvas.height);
+        gl.uniform1f(uTime, t / 1000);
+        gl.uniform2f(uPtr, px, 1 - py);
+        gl.uniform1f(uHov, hov);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        
+        requestAnimationFrame(loop);
+      };
+      requestAnimationFrame(loop);
+    })();
+
+    // ==========================================================================
+    // UI TOAST ÉS PIPELINE INTERAKCIÓK
+    // ==========================================================================
+    const toast = document.getElementById('toast');
+    const toastMsg = document.getElementById('toastMsg');
+    let toastTimeout;
+
+    function notify(text) {
+      toastMsg.textContent = text;
+      toast.classList.add('active');
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove('active');
+      }, 3000);
+    }
+
+    function triggerPipeline(btn) {
+      const original = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = `<i data-lucide="loader-2" class="spin" style="width:14px;height:14px;"></i><span>Futtatás...</span>`;
+      lucide.createIcons();
+      notify('Pipeline inicializálása és adatok feldolgozása...');
+
+      setTimeout(() => {
+        btn.innerHTML = `<i data-lucide="check" style="width:14px;height:14px;"></i><span>Kész</span>`;
+        lucide.createIcons();
+        notify('Adatelemzés sikeresen lefutott (42ms)!');
+        
+        setTimeout(() => {
+          btn.innerHTML = original;
+          btn.disabled = false;
+          lucide.createIcons();
+        }, 2000);
+      }, 1400);
+    }
+
+    document.getElementById('runPipelineHeader').addEventListener('click', function() {
+      triggerPipeline(this);
+    });
+
+    document.getElementById('heroStartBtn').addEventListener('click', function() {
+      triggerPipeline(this);
+    });
+
+    document.getElementById('loadDataBtn').addEventListener('click', () => {
+      notify('Legfrissebb mérkőzés dataset sikeresen betöltve.');
+    });
+
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      notify('Nincs törlendő aktív folyamat a gyorsítótárban.');
+    });
+
+    document.getElementById('langSelector').addEventListener('click', () => {
+      notify('Aktuális profil: Angol (Premier League / GB).');
+    });
+  </script>
+</body>
+</html>

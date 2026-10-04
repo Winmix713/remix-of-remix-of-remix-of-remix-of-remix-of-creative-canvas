@@ -1,0 +1,846 @@
+/* --- MANAGED FONT IMPORTS START (do not edit manually) --- */
+/* INTERNAL USE NAME: Heading */
+@import url('https://fonts.googleapis.com/css2?family=Geist:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
+/* INTERNAL USE NAME: Mono */
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
+/* --- MANAGED FONT IMPORTS END --- */
+
+/* Product UI typeface — Inter, per the winmix Match Intelligence spec. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* @import url() FONT IMPORTS MUST ALWAYS BE AT THE VERY TOP OF THIS FILE, ABOVE THE TAILWIND IMPORTS — DO NOT DELETE THIS COMMENT */
+
+/* CRITICAL: THE FOLLOWING TAILWIND IMPORTS MUST NEVER BE DELETED OR REORDERED — DO NOT DELETE THIS COMMENT */
+@import './_designSystem/ds-6551b66a-cfd3-4df9-a9b1-9ead8d7fe7e9/index.css';
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* END TAILWIND IMPORTS — ALL OTHER CSS MUST GO BELOW THIS LINE */
+
+@custom-variant dark (&:is(.dark *));
+/* ==========================================================================
+   WINMIX — MATCH INTELLIGENCE (dark product UI)
+   Single source of truth for the palette, elevation, motion and component
+   layer. Neutral graphite shades, one blue primary, tonal state colours,
+   soft 2xl panels with a layered depth shadow. There is no light theme.
+   ========================================================================== */
+
+:root {
+  /* --- Neutral shade ramp ---------------------------------------------- */
+  --shade-01: #141414;
+  --shade-02: #101010;
+  --shade-03: #191919;
+  --shade-04: #222222;
+  --shade-05: #4c4c4c;
+  --shade-06: #727272;
+  --shade-07: #7b7b7b;
+  --shade-08: #e2e2e2;
+  --shade-09: #f1f1f1;
+  --shade-10: #fdfdfd;
+  /* --- Brand / status ramp -------------------------------------------- */
+  --primary-01: #2a85ff;
+  --primary-02: #00a656;
+  --primary-03: #ff381c;
+  --primary-04: #7f5fff;
+  --primary-05: #ff9d34;
+  --brand-accent: #f52495;
+  /* --- Surfaces / elevation ------------------------------------------- */
+  --background: #101010;
+  --foreground: #f1f1f1;
+  --card: #191919;
+  --card-foreground: #f1f1f1;
+  --popover: #222222;
+  --popover-foreground: #f1f1f1;
+  --elevated: #222222;
+  --elevated-2: #2b2b2b;
+  --surface-1: #101010;
+  --surface-2: #191919;
+  --surface-pop: #222222;
+  /* --- Roles ------------------------------------------------------------ */
+  --primary: #f1f1f1;
+  --primary-foreground: #101010;
+  --secondary: #222222;
+  --secondary-foreground: #f1f1f1;
+  --muted: #222222;
+  --muted-foreground: #7b7b7b;
+  --accent: #222222;
+  --accent-foreground: #f1f1f1;
+  --destructive: #ff381c;
+  --destructive-foreground: #fdfdfd;
+  /* --- Structure ---------------------------------------------------- */
+  --border: #272727;
+  --border-subtle: #1e1e1e;
+  --border-strong: #3a3a3a;
+  --input: #101010;
+  /* --- Data table surfaces (standings / logs / ledgers) --------------- */
+  --table-header-bg: rgba(255, 255, 255, 0.015);
+  --table-row-alt: transparent;
+  --table-row-hover: rgba(255, 255, 255, 0.03);
+  --table-row-active: rgba(42, 133, 255, 0.08);
+  /* --- Table zone markers (promotion / europe / playoff / relegation) - */
+  --zone-1: #2a85ff;
+  --zone-2: #7f5fff;
+  --zone-3: #ff9d34;
+  --zone-4: #ff381c;
+  --ring: #2a85ff;
+  --radius: 0.875rem;
+  /* --- Signal (the one accent — primary action, focus, live state) ---- */
+  --signal: #2a85ff;
+  --signal-foreground: #fdfdfd;
+  --signal-soft: rgba(42, 133, 255, 0.12);
+  --signal-soft-strong: rgba(42, 133, 255, 0.22);
+  /* --- Match state colors --------------------------------------------- */
+  --positive: #00a656;
+  --positive-foreground: #fdfdfd;
+  --positive-soft: rgba(0, 166, 86, 0.14);
+  --negative: #ff381c;
+  --negative-foreground: #fdfdfd;
+  --negative-soft: rgba(255, 56, 28, 0.14);
+  --warning: #ff9d34;
+  --warning-soft: rgba(255, 157, 52, 0.14);
+  /* --- Pitch motif (kept neutral in this theme) ------------------------ */
+  --pitch: #141414;
+  --pitch-line: #232323;
+  /* --- Data visualization ---------------------------------------------- */
+  --chart-1: #2a85ff;
+  --chart-2: #00a656;
+  --chart-3: #7f5fff;
+  --chart-4: #ff9d34;
+  --chart-5: #f52495;
+  /* --- Sidebar / nav rail ------------------------------------------------ */
+  --sidebar: #191919;
+  --sidebar-foreground: #f1f1f1;
+  --sidebar-primary: #2a85ff;
+  --sidebar-primary-foreground: #fdfdfd;
+  --sidebar-accent: #222222;
+  --sidebar-accent-foreground: #f1f1f1;
+  --sidebar-border: #1e1e1e;
+  --sidebar-ring: #2a85ff;
+  /* --- Elevation shadows ------------------------------------------------- */
+  --shadow-panel: 0px 2.15px 0.5px -2px rgba(0, 0, 0, 0.25),
+    0px 5px 1.5px -4px rgba(8, 8, 8, 0.2), 0px 6px 4px -4px rgba(8, 8, 8, 0.16),
+    0px 6px 13px 0px rgba(8, 8, 8, 0.12), 0px 24px 24px -16px rgba(8, 8, 8, 0.08),
+    2px 4px 16px 0px rgba(253, 253, 253, 0.05) inset;
+  --shadow-panel-lg: 0px 16px 48px -4px rgba(0, 0, 0, 0.75),
+    0px 0px 10px 0px rgba(0, 0, 0, 0.5);
+  --shadow-signal-glow: 0 0 0 1px rgba(42, 133, 255, 0.35),
+    0 6px 20px -6px rgba(42, 133, 255, 0.5);
+  /* --- Panel sheen (KPI cards) ------------------------------------------- */
+  --sheen: linear-gradient(180deg, rgba(241, 241, 241, 0.04), rgba(235, 235, 235, 0.03));
+  /* --- Motion ------------------------------------------------------------ */
+  --ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-move: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-settle: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 360ms;
+}
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: 'tnum' 1, 'cv05' 1;
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-heading;
+    letter-spacing: -0.02em;
+  }
+  :focus-visible {
+    outline: 2px solid var(--signal);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  ::selection {
+    background: var(--signal);
+    color: var(--signal-foreground);
+  }
+  /* Scrollbars stay visible but quiet — people scan dense tables and need
+     the thumb, it just should not shout. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--elevated-2) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--elevated-2);
+    border-radius: 999px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--border-strong);
+  }
+}
+/* ==========================================================================
+   COMPONENT LAYER
+   ========================================================================== */
+
+@layer components {
+  /* --- Panel (card) ----------------------------------------------------- */
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-panel);
+    position: relative;
+  }
+  .panel--elevated {
+    background: var(--elevated);
+  }
+  .panel--flush {
+    padding: 0;
+  }
+  .panel--sheen {
+    background-color: var(--surface-2);
+    background-image: var(--sheen);
+  }
+  .panel--interactive {
+    transition: border-color var(--duration-base) var(--ease-enter),
+      transform var(--duration-base) var(--ease-enter),
+      box-shadow var(--duration-base) var(--ease-enter);
+  }
+  .panel--interactive:hover {
+    border-color: var(--border-strong);
+    transform: translateY(-1px);
+  }
+  .panel--live {
+    border-color: var(--signal-soft-strong);
+    box-shadow: var(--shadow-panel), 0 0 0 1px var(--signal-soft);
+  }
+  .panel-header {
+    padding: 1.25rem 1.25rem 0;
+  }
+  .panel-footer {
+    padding: 0 1.25rem 1.25rem;
+  }
+  .panel-footer--divided {
+    padding: 1rem 1.25rem;
+    border-top: 1px solid var(--border-subtle);
+  }
+  /* Edge fade for horizontally-scrolled row groups (league tables,
+     fixture strips) — signals "more content" without a visible scrollbar. */
+  .panel--edge-fade {
+    position: relative;
+    overflow-x: auto;
+  }
+  .panel--edge-fade::before,
+  .panel--edge-fade::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 32px;
+    pointer-events: none;
+    z-index: 10;
+    transition: opacity var(--duration-base) var(--ease-enter);
+  }
+  .panel--edge-fade::before {
+    left: 0;
+    background: linear-gradient(90deg, var(--card), transparent);
+  }
+  .panel--edge-fade::after {
+    right: 0;
+    background: linear-gradient(270deg, var(--card), transparent);
+  }
+  /* --- Stat readout (score / odds / xG) ---------------------------------- */
+  .stat-readout {
+    @apply tabular-nums;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--foreground);
+  }
+  .stat-readout--live {
+    color: var(--signal);
+  }
+  .stat-readout--muted {
+    color: var(--muted-foreground);
+  }
+  /* --- Live indicator ----------------------------------------------------- */
+  .live-dot {
+    position: relative;
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--primary-03);
+  }
+  .live-dot::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 999px;
+    background: var(--primary-03);
+    opacity: 0.3;
+    animation: signal-pulse 1.8s var(--ease-enter) infinite;
+  }
+  /* --- Badge (tonal tag) --------------------------------------------------- */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    height: 1.5rem;
+    padding: 0 0.5rem;
+    border-radius: 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--muted-foreground);
+  }
+  .badge--live {
+    background: var(--signal-soft);
+    color: var(--signal);
+  }
+  .badge--positive {
+    background: var(--positive-soft);
+    color: var(--positive);
+  }
+  .badge--negative {
+    background: var(--negative-soft);
+    color: var(--negative);
+  }
+  .badge--outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--foreground);
+  }
+  /* --- Button system -------------------------------------------------------- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 2.25rem;
+    padding: 0 0.875rem;
+    border-radius: 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    font-family: theme('fontFamily.heading');
+    transition: background-color var(--duration-base) var(--ease-enter),
+      color var(--duration-base) var(--ease-enter),
+      border-color var(--duration-base) var(--ease-enter),
+      box-shadow var(--duration-base) var(--ease-enter),
+      opacity var(--duration-base) var(--ease-enter);
+  }
+  .btn:disabled,
+  .btn[aria-disabled='true'] {
+    pointer-events: none;
+    opacity: 0.45;
+  }
+  .btn--primary,
+  .btn--signal {
+    background: var(--primary-01);
+    color: var(--shade-10);
+    box-shadow: var(--shadow-panel);
+  }
+  .btn--primary:hover,
+  .btn--primary:focus-visible,
+  .btn--signal:hover,
+  .btn--signal:focus-visible {
+    opacity: 0.9;
+  }
+  .btn--outline {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    color: var(--foreground);
+  }
+  .btn--outline:hover,
+  .btn--outline:focus-visible {
+    border-color: var(--border-strong);
+    background: var(--surface-pop);
+  }
+  .btn--ghost {
+    background: transparent;
+    color: var(--muted-foreground);
+  }
+  .btn--ghost:hover,
+  .btn--ghost:focus-visible {
+    background: var(--surface-pop);
+    color: var(--foreground);
+  }
+  .btn--danger {
+    background: rgba(255, 56, 28, 0.12);
+    border: 1px solid rgba(255, 56, 28, 0.3);
+    color: var(--primary-03);
+  }
+  .btn--danger:hover,
+  .btn--danger:focus-visible {
+    background: rgba(255, 56, 28, 0.18);
+  }
+  .btn--sm {
+    height: 2rem;
+    padding: 0 0.625rem;
+    font-size: 0.75rem;
+    border-radius: 0.625rem;
+  }
+  .btn--lg {
+    height: 2.5rem;
+    padding: 0 1.125rem;
+    font-size: 0.8125rem;
+    border-radius: 0.75rem;
+  }
+  /* Segmented control — market / period selectors (1X2, O/U, HT/FT ...). */
+  .seg {
+    display: inline-flex;
+    padding: 0.125rem;
+    border-radius: 0.75rem;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+  }
+  .seg-tab,
+  .btn--tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    height: 1.875rem;
+    padding: 0 0.75rem;
+    border-radius: 0.625rem;
+    border: 1px solid transparent;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--muted-foreground);
+    transition: background-color var(--duration-base) var(--ease-enter),
+      color var(--duration-base) var(--ease-enter),
+      border-color var(--duration-base) var(--ease-enter);
+  }
+  .seg-tab:hover,
+  .btn--tab:hover,
+  .seg-tab:focus-visible,
+  .btn--tab:focus-visible {
+    color: var(--foreground);
+  }
+  .seg-tab[aria-selected='true'],
+  .seg-tab.is-active,
+  .btn--tab[aria-selected='true'],
+  .btn--tab.is-active {
+    background: var(--surface-pop);
+    border-color: var(--border);
+    color: var(--foreground);
+  }
+  /* Sidebar / rail navigation item */
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    height: 2.5rem;
+    padding: 0 0.75rem;
+    border-radius: 0.75rem;
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+    transition: background-color var(--duration-base) var(--ease-enter),
+      color var(--duration-base) var(--ease-enter);
+  }
+  .nav-item:hover {
+    background: var(--surface-pop);
+    color: var(--foreground);
+  }
+  .nav-item.is-active,
+  .nav-item[aria-current='page'] {
+    background: var(--signal-soft);
+    color: var(--signal);
+  }
+  .menu-item {
+    color: var(--muted-foreground);
+    transition: background-color var(--duration-fast) var(--ease-enter),
+      color var(--duration-fast) var(--ease-enter);
+  }
+  .menu-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--foreground);
+  }
+  /* --- Field (input) --------------------------------------------------------- */
+  .field {
+    display: block;
+    width: 100%;
+    height: 2.25rem;
+    padding: 0 0.75rem;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    font-size: 0.75rem;
+    color: var(--foreground);
+    transition: border-color var(--duration-base) var(--ease-enter),
+      box-shadow var(--duration-base) var(--ease-enter);
+  }
+  .field::placeholder {
+    color: var(--muted-foreground);
+  }
+  .field:hover {
+    border-color: var(--border-strong);
+  }
+  .field:focus {
+    outline: none;
+    border-color: var(--signal);
+    box-shadow: 0 0 0 3px var(--signal-soft);
+  }
+  .field--error {
+    border-color: var(--negative);
+  }
+  .field--error:focus {
+    box-shadow: 0 0 0 3px var(--negative-soft);
+  }
+  /* --- Crest (club logo) -------------------------------------------------------- */
+  .crest {
+    display: block;
+    flex-shrink: 0;
+    width: auto;
+    object-fit: contain;
+  }
+  .crest--sm {
+    height: 20px;
+  }
+  .crest--md {
+    height: 32px;
+  }
+  .crest--lg {
+    height: 48px;
+  }
+  .crest--xl {
+    height: 72px;
+  }
+  /* --- Kit number (squad number chip) --------------------------------------------- */
+  .kit-number {
+    @apply tabular-nums;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.625rem;
+    border: 1px solid var(--border);
+    background: var(--elevated);
+    font-weight: 600;
+    font-size: 0.8125rem;
+    color: var(--foreground);
+  }
+  /* --- Trend (form / xG delta indicator) ------------------------------------------ */
+  .trend {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+  .trend--positive {
+    color: var(--positive);
+  }
+  .trend--negative {
+    color: var(--negative);
+  }
+  /* --- Divider ------------------------------------------------------------------- */
+  .divider {
+    height: 1px;
+    background: var(--border-subtle);
+    border: none;
+  }
+  /* --- Data table ------------------------------------------------------------------
+     One shared product table: no zebra, hairline row rules, quiet sticky
+     header, tabular figures, and an optional zone rail on the leading cell. */
+  .table-scroll {
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .table-scroll::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  .table-scroll::-webkit-scrollbar-thumb {
+    background: var(--elevated-2);
+    border-radius: 3px;
+  }
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+  }
+  .data-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--card);
+    box-shadow: inset 0 0 0 100vmax var(--table-header-bg),
+      inset 0 -1px 0 0 var(--border-subtle);
+    padding: 0.625rem 0.625rem;
+    font-family: theme('fontFamily.heading');
+    font-size: 0.75rem;
+    font-weight: 400;
+    letter-spacing: 0;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+    user-select: none;
+  }
+  .data-table thead th.is-sortable {
+    cursor: pointer;
+  }
+  .data-table thead th .th-label {
+    border-bottom: 1px solid transparent;
+    padding-bottom: 1px;
+    transition: border-color var(--duration-fast) var(--ease-enter);
+  }
+  .data-table thead th.is-sortable:hover .th-label {
+    border-bottom-color: var(--border-strong);
+  }
+  .data-table thead th[aria-sort='ascending'],
+  .data-table thead th[aria-sort='descending'] {
+    color: var(--foreground);
+  }
+  .data-table tbody tr {
+    height: 46px;
+    transition: background-color var(--duration-fast) var(--ease-enter);
+  }
+  @media (min-width: 768px) {
+    .data-table tbody tr {
+      height: 50px;
+    }
+  }
+  .data-table tbody tr:nth-child(even) {
+    background: var(--table-row-alt);
+  }
+  .data-table tbody tr:hover {
+    background: var(--table-row-hover);
+  }
+  .data-table tbody tr.is-active {
+    background: var(--table-row-active);
+  }
+  .data-table tbody tr.row-divider > td {
+    border-bottom-color: var(--border);
+  }
+  .data-table tbody td {
+    padding: 0 0.625rem;
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
+  .data-table tbody tr:last-child > td {
+    border-bottom: none;
+  }
+  /* --- Skeleton loading state ------------------------------------------------------ */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--elevated);
+    border-radius: 0.625rem;
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.05),
+      transparent
+    );
+    animation: skeleton-shimmer 1.6s var(--ease-move) infinite;
+  }
+}
+/* ==========================================================================
+   UTILITIES
+   ========================================================================== */
+
+@layer utilities {
+  /* --- UI type scale ---------------------------------------------------
+     One named scale replaces ad-hoc text-[10px]…text-[15px] literals.
+     Mobile sits one step larger than the dense desktop sizes. */
+  .text-ui-2xs {
+    font-size: 0.75rem;
+    line-height: 1.35;
+  }
+  .text-ui-xs {
+    font-size: 0.75rem;
+    line-height: 1.4;
+  }
+  .text-ui-sm {
+    font-size: 0.8125rem;
+    line-height: 1.5;
+  }
+  .text-ui-base {
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+  .text-ui-lg {
+    font-size: 1rem;
+    line-height: 1.4;
+  }
+  /* Fluid page title — 18px on a phone, 22px on a wide desktop. */
+  .text-page-title {
+    font-size: clamp(1.125rem, 1rem + 0.7vw, 1.375rem);
+    line-height: 1.2;
+  }
+  @media (min-width: 768px) {
+    .text-ui-2xs {
+      font-size: 0.6875rem;
+    }
+    .text-ui-xs {
+      font-size: 0.75rem;
+    }
+    .text-ui-sm {
+      font-size: 0.75rem;
+    }
+    .text-ui-base {
+      font-size: 0.8125rem;
+    }
+    .text-ui-lg {
+      font-size: 0.9375rem;
+    }
+  }
+  /* --- Container queries -----------------------------------------------
+     Cards that must reflow by their own width, not the viewport's. */
+  .cq {
+    container-type: inline-size;
+  }
+  /* --- Fluid page spacing ----------------------------------------------
+     Gap that scales smoothly from mobile to desktop instead of jumping
+     at a single breakpoint. */
+  .gap-page {
+    gap: clamp(1rem, 0.75rem + 1vw, 1.25rem);
+  }
+  /* --- Responsive table wrapper ---------------------------------------
+     Ensures tables scroll horizontally on narrow screens without
+     breaking the page layout. */
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* --- Touch targets --------------------------------------------------- */
+  @media (pointer: coarse) {
+    .tap {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+  /* Section eyebrow used to group long stacks of panels into named areas. */
+  .section-label {
+    @apply flex items-center gap-2 uppercase text-muted-foreground;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+  /* Depth shadow as a utility for hand-composed surfaces. */
+  .shadow-depth {
+    box-shadow: var(--shadow-panel);
+  }
+  .bg-sheen {
+    background-color: var(--surface-2);
+    background-image: var(--sheen);
+  }
+  /* Faint grid used behind hero and empty-state surfaces. */
+  .bg-pitch-grid {
+    background-color: var(--pitch);
+    background-image: linear-gradient(var(--pitch-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--pitch-line) 1px, transparent 1px);
+    background-size: 40px 40px;
+    background-position: center;
+  }
+}
+/* ==========================================================================
+   THIRD-PARTY OVERRIDES
+   ========================================================================== */
+
+.swiper-pagination-progressbar {
+  top: unset !important;
+  bottom: 0;
+  z-index: 10;
+  background: var(--border) !important;
+}
+.swiper-pagination-progressbar-fill {
+  background: var(--signal) !important;
+}
+.recharts-tooltip-wrapper {
+  z-index: 10;
+}
+.recharts-default-tooltip {
+  background: var(--popover) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 0.75rem !important;
+  box-shadow: var(--shadow-panel-lg) !important;
+}
+/* ==========================================================================
+   MOTION
+   Subtle, purposeful, and always opt-out-able.
+   ========================================================================== */
+
+@keyframes signal-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+@keyframes skeleton-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-signal-pulse {
+  animation: signal-pulse 1.8s var(--ease-enter) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-signal-pulse,
+  .live-dot::after,
+  .skeleton::after {
+    animation: none;
+  }
+  .live-dot::after {
+    opacity: 0;
+  }
+}
