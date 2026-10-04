@@ -65,6 +65,17 @@ function isLovableCloudUrl(value: string): boolean {
   }
 }
 
+/** Extracts the project ref (first subdomain label) from a `*.supabase.co` URL. */
+function supabaseProjectRef(value: string): string | null {
+  try {
+    const host = new URL(value).hostname;
+    const m = /^([^.]+)\.supabase\.co$/.exec(host);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Pure resolution over an arbitrary env bag — the single source of truth for
  * the documented order, and the unit-testable seam (`import.meta.env` is
@@ -80,7 +91,14 @@ export function resolveCloudEnv(
     (env['VITE_SUPABASE_ANON_KEY'] ?? '').trim();
 
 
-  if (isValidHttpUrl(envUrl) && isNonEmptyKey(envKey) && !isLovableCloudUrl(envUrl)) {
+  // If the env URL points to a different Supabase project than the fallback,
+  // the baked-in key won't be accepted (401). Fall through to the fallback so
+  // the cloud tier connects to the project the key actually belongs to.
+  const envRef = supabaseProjectRef(envUrl);
+  const fallbackRef = supabaseProjectRef(fallback.url);
+  const refMismatch = envRef && fallbackRef && envRef !== fallbackRef;
+
+  if (isValidHttpUrl(envUrl) && isNonEmptyKey(envKey) && !isLovableCloudUrl(envUrl) && !refMismatch) {
     return Object.freeze({
       url: envUrl.replace(/\/+$/, ''),
       anonKey: envKey,

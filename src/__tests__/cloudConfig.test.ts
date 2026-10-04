@@ -2,20 +2,20 @@ import { describe, expect, it } from 'vitest';
 import { resolveCloudEnv, readCloudEnv } from '../utils/cloudConfig';
 import { cloudEndpointSummary, isCloudTierConfigured } from '../utils/supabaseTier';
 
-const FB = { url: 'https://fallback.example.supabase.co', anonKey: 'sb_publishable_fallback' };
+const FB = { url: 'https://fbproject.supabase.co', anonKey: 'sb_publishable_fallback' };
 
 describe('cloudConfig — feloldási sorrend', () => {
   it('a .env-et részesíti előnyben, ha az URL és a kulcs is érvényes (záró / levágva)', () => {
     expect(
       resolveCloudEnv(
         {
-          VITE_SUPABASE_URL: ' https://staging.example.supabase.co/ ',
+          VITE_SUPABASE_URL: ' https://fbproject.supabase.co/ ',
           VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_staging',
         },
         FB,
       ),
     ).toEqual({
-      url: 'https://staging.example.supabase.co',
+      url: 'https://fbproject.supabase.co',
       anonKey: 'sb_publishable_staging',
       source: 'env',
     });
@@ -24,7 +24,7 @@ describe('cloudConfig — feloldási sorrend', () => {
   it('elfogadja a történeti VITE_SUPABASE_ANON_KEY nevet is', () => {
     const env = resolveCloudEnv(
       {
-        VITE_SUPABASE_URL: 'https://staging.example.supabase.co',
+        VITE_SUPABASE_URL: 'https://fbproject.supabase.co',
         VITE_SUPABASE_PUBLISHABLE_KEY: '',
         VITE_SUPABASE_ANON_KEY: 'legacy-jwt-key',
       },
@@ -34,10 +34,10 @@ describe('cloudConfig — feloldási sorrend', () => {
   });
 
   it.each([
-    ['hiányzó séma', 'staging.example.supabase.co'],
+    ['hiányzó séma', 'fbproject.supabase.co'],
     ['üres URL', ''],
     ['szemét', 'nem-egy-url'],
-    ['nem http protokoll', 'ftp://staging.example.supabase.co'],
+    ['nem http protokoll', 'ftp://fbproject.supabase.co'],
   ])('érvénytelen env URL (%s) → fallback', (_label, url) => {
     expect(
       resolveCloudEnv({ VITE_SUPABASE_URL: url, VITE_SUPABASE_PUBLISHABLE_KEY: 'valami' }, FB),
@@ -56,11 +56,35 @@ describe('cloudConfig — feloldási sorrend', () => {
     ).toMatchObject({ source: 'fallback', url: FB.url, anonKey: FB.anonKey });
   });
 
+  it('eltérő Supabase projekt ref az env URL-ben → fallback (kulcs nem tartozik a projekthez)', () => {
+    expect(
+      resolveCloudEnv(
+        {
+          VITE_SUPABASE_URL: 'https://other-project.supabase.co',
+          VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_fallback',
+        },
+        FB,
+      ),
+    ).toMatchObject({ source: 'fallback', url: FB.url, anonKey: FB.anonKey });
+  });
+
+  it('ugyanaz a projekt ref mint a fallback → env (nem fallback)', () => {
+    expect(
+      resolveCloudEnv(
+        {
+          VITE_SUPABASE_URL: 'https://fbproject.supabase.co',
+          VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_staging',
+        },
+        FB,
+      ),
+    ).toMatchObject({ source: 'env', anonKey: 'sb_publishable_staging' });
+  });
+
   it('csak whitespace kulcs → fallback, nem env', () => {
     expect(
       resolveCloudEnv(
         {
-          VITE_SUPABASE_URL: 'https://staging.example.supabase.co',
+          VITE_SUPABASE_URL: 'https://fbproject.supabase.co',
           VITE_SUPABASE_PUBLISHABLE_KEY: '   ',
           VITE_SUPABASE_ANON_KEY: '',
         },
