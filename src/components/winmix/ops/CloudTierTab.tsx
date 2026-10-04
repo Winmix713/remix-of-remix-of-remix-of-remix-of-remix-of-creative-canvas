@@ -2,8 +2,6 @@ import React, { useMemo } from 'react';
 import { Cloud, CloudOff, RefreshCw, Upload } from 'lucide-react';
 import { useCloudTierContext } from '../../../contexts/CloudTierContext';
 import { cloudEndpointSummary, lastRatingsSource, type IngestResult } from '../../../utils/supabaseTier';
-import { AdminTokenField, RowErrorTable, SchemaAnalyzer } from './CloudAdminTools';
-import { SeasonAuditTool } from './SeasonAuditTool';
 import { CROSSCHECK_TOLERANCE, type CrossCheckRow } from '../../../hooks/useOpsActions';
 import type { League } from '../../../types/winmix';
 import { DataGrid, type GridColumn } from '../DataGrid';
@@ -103,7 +101,7 @@ export function CloudTierTab({
             type="button"
             className="btn btn--outline btn--sm tap gap-1.5"
             onClick={() => void cloud.retry()}>
-            
+
               <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
               Kapcsolat újrapróbálása
             </button> :
@@ -126,11 +124,11 @@ export function CloudTierTab({
             cloud.health.status === 'probing'
             }
             onClick={() => void cloud.loadRatings(league)}>
-            
+
             <RefreshCw
               className={`h-3.5 w-3.5 ${cloud.loadingRatings ? 'animate-spin' : ''}`}
               aria-hidden="true" />
-            
+
             {cloud.loadingRatings ? 'Betöltés…' : 'SQL értékelés betöltése'}
           </button>
         </PanelActions>
@@ -161,10 +159,24 @@ export function CloudTierTab({
             `Hiba: ${ingestResult.errors.join('; ')}`}
         </div>
       ) : null}
-      {ingestResult?.rowErrors ? <RowErrorTable rows={ingestResult.rowErrors} /> : null}
-      <AdminTokenField />
-      <SchemaAnalyzer />
-      <SeasonAuditTool />
+      {ingestResult?.rowErrors ? (
+        <div className="max-h-72 overflow-auto border-b border-border px-3 py-2 sm:px-4">
+          <p className="mb-1 text-ui-xs font-bold text-foreground">Kihagyott sorok ({ingestResult.rowErrors.length})</p>
+          <table className="w-full text-ui-xs">
+            <thead className="text-muted-foreground">
+              <tr><th className="text-left">Szezon</th><th className="text-left">#</th><th className="text-left">Mérkőzés</th><th className="text-left">Ok</th></tr>
+            </thead>
+            <tbody>
+              {ingestResult.rowErrors.map((r, i) => (
+                <tr key={i} className="border-t border-border">
+                  <td className="pr-2">{r.season}</td><td className="pr-2">{r.matchNo}</td>
+                  <td className="pr-2">{r.match}</td><td className="text-error">{r.reason}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
       {crossCheck.length > 0 && lastRatingsSource === 'team_season_stats' ? (
         <p className="border-b border-border px-3 py-2 text-ui-xs text-muted-foreground sm:px-4">
           Forrás: <code className="font-mono">winmix_team_season_stats</code> (a <code className="font-mono">view_team_ratings</code> nézet még nincs létrehozva) — a hazai és vendég érték itt az összesített gólkülönbség.
@@ -180,12 +192,10 @@ export function CloudTierTab({
         empty={
         <>
             Nincs betöltött SQL értékelés. Ha betöltés után is üres: a mérkőzés- és statisztikatáblák még
-            üresek — kattints a <strong>Szezonok feltöltése a felhőbe</strong> gombra, majd hozd létre a{' '}
-            <code className="font-mono">view_team_ratings</code> nézetet (az AI séma-elemző megírja hozzá az SQL-t).
+            üresek — kattints a <strong>Szezonok feltöltése a felhőbe</strong> gombra.
             Tolerancia: {CROSSCHECK_TOLERANCE}.
           </>
         } />
-      
-    </Panel>);
 
+    </Panel>);
 }

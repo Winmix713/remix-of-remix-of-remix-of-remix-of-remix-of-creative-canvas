@@ -256,20 +256,11 @@ export interface IngestResult {
   rowErrors?: IngestRowError[];
 }
 
-export const ADMIN_TOKEN_KEY = 'winmix.adminToken';
-
-export function readAdminToken(): string {
-  try {
-    return window.sessionStorage.getItem(ADMIN_TOKEN_KEY) ?? '';
-  } catch {
-    return '';
-  }
-}
-
 /**
  * Uploads local seasons through a server function that holds the secret key.
- * Team names are mapped to `winmix_teams` ids server-side; rows that cannot be
- * mapped or validated come back in `rowErrors`. Idempotent (stable ids + upsert).
+ * Team names are mapped to `winmix_teams` ids server-side (auto-created if
+ * missing); rows that cannot be validated come back in `rowErrors`.
+ * Idempotent (stable ids + upsert).
  */
 export async function ingestSeasonsToCloud(params: {
   seasons: Array<{
@@ -303,14 +294,12 @@ export async function ingestSeasonsToCloud(params: {
   });
   const env = readEnv();
   if (!env) return fail('A felhő tier nincs konfigurálva.');
-  const adminToken = readAdminToken();
-  if (!adminToken) return fail('Add meg az admin kódot a Felhő fülön a feltöltéshez.');
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), 60000);
   try {
     const res = await fetch(`${env.url}/functions/v1/winmix-ingest`, {
       method: 'POST',
-      headers: { ...functionHeaders(env.anonKey), 'X-Admin-Token': adminToken },
+      headers: { ...functionHeaders(env.anonKey) },
       body: JSON.stringify({
         mode: 'merge',
         allowPartial: false,
@@ -365,48 +354,4 @@ function functionHeaders(key: string): Record<string, string> {
   return h;
 }
 
-/** Sends a schema snapshot to the winmix-schema-analyze function (AI review). */
-export async function analyzeSchemaSnapshot(schema: string): Promise<string> {
-  const env = readEnv();
-  if (!env) throw new Error('A felhő tier nincs konfigurálva.');
-  const res = await fetch(`${env.url}/functions/v1/winmix-schema-analyze`, {
-    method: 'POST',
-    headers: { ...functionHeaders(env.anonKey), 'X-Admin-Token': readAdminToken() },
-    body: JSON.stringify({ schema })
-  });
-  if (res.status === 404) throw new Error('Az AI elemző szolgáltatás még nincs telepítve.');
-  const body = (await res.json().catch(() => ({}))) as { report?: string; error?: string };
-  if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
-  return body.report ?? '';
-}
 
-export interface SeasonAuditIssue {
-  row: number | null;
-  match: string;
-  field: string;
-  severity: 'error' | 'warning';
-  problem: string;
-  suggestion: string;
-}
-export interface SeasonAuditResult {
-  summary: string;
-  rowsChecked: number | null;
-  issues: SeasonAuditIssue[];
-}
-
-/** Sends a raw season file to the winmix-season-audit function (AI review, read-only). */
-export async function auditSeasonFile(fileName: string, content: string): Promise<SeasonAuditResult> {
-  const env = readEnv();
-  if (!env) throw new Error('A felhő tier nincs konfigurálva.');
-  const token = readAdminToken();
-  if (!token) throw new Error('Add meg az admin kódot a Felhő fülön.');
-  const res = await fetch(`${env.url}/functions/v1/winmix-season-audit`, {
-    method: 'POST',
-    headers: { ...functionHeaders(env.anonKey), 'X-Admin-Token': token },
-    body: JSON.stringify({ fileName, content })
-  });
-  if (res.status === 404) throw new Error('Az AI szezon-ellenőrző (winmix-season-audit) még nincs telepítve az adatbázis projektedben.');
-  const body = (await res.json().catch(() => ({}))) as Partial<SeasonAuditResult> & { error?: string };
-  if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
-  return { summary: body.summary ?? '', rowsChecked: body.rowsChecked ?? null, issues: body.issues ?? [] };
-}

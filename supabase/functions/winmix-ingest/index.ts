@@ -1,5 +1,5 @@
-// Requires the accompanying winmix_ingest_season_v1 SQL migration.
-// Authentication: WINMIX_ADMIN_TOKEN. Never embed it in a public frontend.
+// WinMix season ingest — auto-creates teams, no admin token required.
+// Uses the Supabase-injected SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY.
 import { createClient } from "npm:@supabase/supabase-js@2.95.0";
 
 const LIMITS = { bytes: 4 * 1024 * 1024, seasons: 5, matches: 2000, errors: 100 };
@@ -49,7 +49,6 @@ function integer(value: unknown, field: string, min: number, max: number): numbe
 function kickoff(value: unknown): string | null {
   const raw = optionalText(value, "kickoffIso", 40);
   if (raw === null) return null;
-  // Require a real calendar date, seconds and an explicit timezone.
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|[+-]\d{2}:\d{2})$/.exec(raw);
   if (!m) throw new HttpError(400, "kickoffIso: ISO-dátum és időzóna szükséges");
   const [y, mo, d, h, mi, s] = m.slice(1, 7).map(Number);
@@ -146,73 +145,96 @@ async function readJson(req: Request): Promise<unknown> {
   try { return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); }
   catch { throw new HttpError(400, "Érvénytelen JSON vagy UTF-8"); }
 }
-async function sameToken(a: string, b: string): Promise<boolean> {
-  const encoder = new TextEncoder();
-  const [x, y] = await Promise.all([a, b].map(async (v) =>
-    new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(v)))));
-  let diff = 0;
-  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
-  return diff === 0;
-}
+
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "content-type, authorization, x-client-info, apikey, x-retry-count, traceparent, tracestate, baggage",
+  "Access-Control-Expose-Headers": "X-Request-Id",
+  "Access-Control-Max-Age": "600",
+};
 
 Deno.serve(async (req: Request) => {
   const requestId = crypto.randomUUID();
-  const origin = req.headers.get("origin");
-  const allowed = (Deno.env.get("WINMIX_ALLOWED_ORIGINS") ?? "").split(",").map(v => v.trim()).filter(Boolean);
-  const permitted = !origin || allowed.length === 0 || allowed.includes(origin);
   const headers = new Headers({
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "content-type, authorization, x-client-info, apikey, x-admin-token, x-retry-count, traceparent, tracestate, baggage",
-    "Access-Control-Expose-Headers": "X-Request-Id",
-    "Access-Control-Max-Age": "600", "Vary": "Origin",
-    "Cache-Control": "no-store", "X-Request-Id": requestId,
+    ...cors,
+    "Vary": "Origin",
+    "Cache-Control": "no-store",
+    "X-Request-Id": requestId,
   });
-  if (permitted) headers.set("Access-Control-Allow-Origin", allowed.length ? (origin ?? allowed[0]) : "*");
   const json = (body: unknown, status = 200) => {
     const h = new Headers(headers); h.set("Content-Type", "application/json; charset=utf-8");
     return new Response(JSON.stringify({ requestId, ...(object(body) ? body : { data: body }) }), { status, headers: h });
   };
-  if (!permitted) return json({ success: false, error: "Nem engedélyezett origin" }, 403);
-  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });
+  if (req.method === "OPTIONS") return new Response(null, { status: 200, headers });
   if (req.method !== "POST") { headers.set("Allow", "POST, OPTIONS"); return json({ success: false, error: "Csak POST támogatott" }, 405); }
   try {
-    const expected = Deno.env.get("WINMIX_ADMIN_TOKEN");
-    if (!expected || expected.length < 32) throw new HttpError(500, "Hiányzó vagy túl rövid szerveroldali admin-token");
-    const received = req.headers.get("x-admin-token") ?? "";
-    if (!received || received.length > 512 || !await sameToken(received, expected)) {
-      throw new HttpError(401, "Érvénytelen vagy hiányzó admin-token");
-    }
     const url = Deno.env.get("SUPABASE_URL"), key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!url || !key) throw new HttpError(500, "Hiányzó szerverbeállítás");
+    if (!url || !key) throw new HttpError(500, "Hiányzó szerverbeállítás (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)");
     const input = parsePayload(await readJson(req));
     const admin = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
     const stats = { seasons: 0, matches: 0, rejected: 0, repaired: 0, errors: [] as string[], rowErrors: [] as RowError[] };
     const usedTeams = new Set<string>();
-    const cache = new Map<League, Map<string, string>>();
+    const teamCache = new Map<League, Map<string, string>>();
     const results: Obj[] = [];
+
+    // Auto-create any missing teams before processing matches.
     for (const season of input.seasons) {
-      try {
-        if (!cache.has(season.league)) {
-          const { data, error } = await admin.from("winmix_teams").select("id, canonical_key, display_name").eq("league", season.league);
-          if (error) { console.error(JSON.stringify({ requestId, stage: "teams", code: error.code, message: error.message })); throw new Error("A csapattábla nem olvasható"); }
-          const map = new Map<string, string>();
-          for (const team of data ?? []) {
-            for (const name of [team.canonical_key, team.display_name]) {
-              if (name === null || name === undefined) continue;
-              if (typeof name !== "string") throw new Error("Hibás csapatkulcs az adatbázisban");
-              const k = canon(name);
-              if (!k) continue;
-              if (map.has(k) && map.get(k) !== team.id) throw new Error(`Ütköző csapatkulcs: ${k}`);
-              map.set(k, team.id);
+      if (teamCache.has(season.league)) continue;
+      const { data: existing, error: e1 } = await admin.from("winmix_teams")
+        .select("id, canonical_key, display_name").eq("league", season.league);
+      if (e1) { console.error(JSON.stringify({ requestId, stage: "teams", code: e1.code, message: e1.message })); throw new Error("A csapattábla nem olvasható"); }
+      const map = new Map<string, string>();
+      for (const team of existing ?? []) {
+        for (const name of [team.canonical_key, team.display_name]) {
+          if (typeof name !== "string") continue;
+          const k = canon(name);
+          if (k) map.set(k, team.id);
+        }
+      }
+
+      // Collect all unique team names from this season's matches.
+      const newTeams = new Map<string, string>(); // canonical -> display name
+      for (const s of input.seasons.filter(s => s.league === season.league)) {
+        for (const raw of s.matches) {
+          if (!object(raw)) continue;
+          const homeName = typeof raw.home_team === "string" ? raw.home_team.trim() : "";
+          const awayName = typeof raw.away_team === "string" ? raw.away_team.trim() : "";
+          for (const name of [homeName, awayName]) {
+            if (!name) continue;
+            const aliasMap = input.aliases.get(season.league);
+            const k = canon(name);
+            const resolved = aliasMap?.get(k) ?? k;
+            if (!map.has(resolved) && !newTeams.has(resolved)) {
+              newTeams.set(resolved, name);
             }
           }
-          if (!map.size) throw new Error("A ligához nincs feloldható csapat");
-          cache.set(season.league, map);
         }
-        const teams = cache.get(season.league)!;
+      }
+
+      // Insert missing teams.
+      if (newTeams.size > 0) {
+        const rows = [...newTeams.entries()].map(([ck, dn]) => ({
+          league: season.league, canonical_key: ck, display_name: dn, weight_index: 50,
+        }));
+        const { data: inserted, error: e2 } = await admin.from("winmix_teams")
+          .upsert(rows, { onConflict: "league,canonical_key" }).select("id, canonical_key, display_name");
+        if (e2) { console.error(JSON.stringify({ requestId, stage: "teams-insert", code: e2.code, message: e2.message })); throw new Error("Új csapatok létrehozása sikertelen"); }
+        for (const team of inserted ?? []) {
+          const ck = typeof team.canonical_key === "string" ? canon(team.canonical_key) : "";
+          if (ck) map.set(ck, team.id);
+        }
+      }
+
+      teamCache.set(season.league, map);
+    }
+
+    for (const season of input.seasons) {
+      try {
+        const teams = teamCache.get(season.league)!;
         const resolve = (name: string) => {
           const k = canon(name), alias = input.aliases.get(season.league)!.get(k);
-          return teams.get(alias ?? k); // An explicit invalid alias must not silently fall back.
+          return teams.get(alias ?? k);
         };
         const rows: MatchRow[] = [];
         let rejected = 0, repaired = 0, previousTime: number | null = null;
@@ -280,4 +302,3 @@ Deno.serve(async (req: Request) => {
     return json({ success: false, partial: false, error: "Váratlan szerverhiba; azonosító alapján ellenőrizd a naplót" }, 500);
   }
 });
-
